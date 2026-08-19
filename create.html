@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Create a Conference — Conference Manager</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --pf-ink:        #1E2233;
+    --pf-indigo:      #3E4C9C;
+    --pf-indigo-light:#EEF0FA;
+    --pf-white:       #FFFFFF;
+    --pf-gray:        #F5F6FA;
+    --pf-border:      #DADFF0;
+    --pf-muted:       #656B85;
+    --pf-green:       #1E7A3D;
+    --pf-green-light: #E7F5EC;
+    --pf-red:         #B3261E;
+    --pf-red-light:   #FBECEA;
+  }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #eef0f6;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px 80px;
+    color: var(--pf-ink);
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 640px;
+  }
+
+  .top-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .top-brand .mark {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--pf-indigo); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 15px; flex-shrink: 0;
+  }
+  .top-brand h1 { font-size: 16px; color: var(--pf-ink); }
+  .top-brand p { font-size: 11.5px; color: var(--pf-muted); }
+
+  .card {
+    background: var(--pf-white);
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(30,34,51,0.08);
+    padding: 22px;
+    margin-bottom: 18px;
+  }
+
+  .card h2 {
+    font-size: 15px;
+    color: var(--pf-indigo);
+    margin-bottom: 4px;
+  }
+  .card .card-sub {
+    font-size: 12px;
+    color: var(--pf-muted);
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+
+  .field-group { margin-bottom: 16px; }
+  .field-group:last-child { margin-bottom: 0; }
+  .field-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--pf-ink);
+    margin-bottom: 6px;
+  }
+  .field-group input[type="text"],
+  .field-group input[type="email"],
+  .field-group input[type="number"],
+  .field-group input[type="date"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--pf-border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--pf-ink);
+  }
+  .field-group input:focus { border-color: var(--pf-indigo); outline: none; }
+  .field-hint { font-size: 11px; color: var(--pf-muted); margin-top: 5px; line-height: 1.5; }
+  .field-hint.error { color: var(--pf-red); }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field-group { flex: 1; }
+
+  .slug-preview {
+    font-size: 12px;
+    color: var(--pf-indigo);
+    margin-top: 6px;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+  }
+
+  .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-swatch {
+    width: 34px; height: 34px; border-radius: 8px;
+    cursor: pointer; border: 3px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px;
+  }
+  .color-swatch.selected { border-color: var(--pf-ink); }
+
+  .pin-input {
+    letter-spacing: 0.3em;
+    font-size: 20px !important;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  /* Schedule builder */
+  .session-row {
+    border: 2px solid var(--pf-border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .session-row .remove-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: var(--pf-red-light);
+    color: var(--pf-red);
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .session-row .field-row { margin-bottom: 8px; }
+  .session-row .field-row:last-child { margin-bottom: 0; }
+  .session-row input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid var(--pf-border);
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .session-row input:focus { border-color: var(--pf-indigo); outline: none; }
+  .session-row .mini-label {
+    font-size: 10px; font-weight: bold; color: var(--pf-muted);
+    text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; display: block;
+  }
+
+  .add-session-btn {
+    width: 100%;
+    padding: 11px;
+    border: 2px dashed var(--pf-border);
+    border-radius: 10px;
+    background: var(--pf-gray);
+    color: var(--pf-indigo);
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .add-session-btn:hover { border-color: var(--pf-indigo); }
+
+  .submit-btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: bold;
+    background: var(--pf-border);
+    color: #8a8a8a;
+    cursor: not-allowed;
+    margin-top: 4px;
+  }
+  .submit-btn.ready { background: var(--pf-indigo); color: #fff; cursor: pointer; }
+  .submit-btn.ready:hover { background: #333e82; }
+
+  .result-card {
+    background: var(--pf-green-light);
+    border: 2px solid var(--pf-green);
+    border-radius: 14px;
+    padding: 22px;
+    text-align: center;
+  }
+  .result-card .check {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--pf-green); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin: 0 auto 12px;
+  }
+  .result-card h2 { color: var(--pf-green); font-size: 17px; margin-bottom: 6px; }
+  .result-card p { font-size: 12.5px; color: var(--pf-ink); margin-bottom: 14px; }
+
+  .link-box {
+    background: #fff;
+    border: 1px solid var(--pf-green);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    text-align: left;
+  }
+  .link-box .link-label {
+    font-size: 10.5px; font-weight: bold; color: var(--pf-muted);
+    text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px;
+  }
+  .link-box .link-value {
+    font-size: 12px; color: var(--pf-indigo); word-break: break-all;
+    font-family: 'Courier New', monospace;
+  }
+  .copy-btn {
+    margin-top: 6px;
+    font-size: 11px;
+    padding: 5px 10px;
+    border: 1px solid var(--pf-indigo);
+    background: #fff;
+    color: var(--pf-indigo);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .module-row {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px; border: 2px solid var(--pf-border); border-radius: 10px; margin-bottom: 10px;
+  }
+  .module-row:last-child { margin-bottom: 0; }
+  .module-row.disabled { opacity: .55; }
+  .module-toggle { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; width: 100%; }
+  .module-row.disabled .module-toggle { cursor: default; }
+  .module-toggle input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--pf-indigo); flex-shrink: 0; }
+  .module-name { font-size: 13.5px; font-weight: bold; color: var(--pf-ink); margin-bottom: 3px; }
+  .module-desc { font-size: 11.5px; color: var(--pf-muted); line-height: 1.5; }
+  .soon-badge {
+    display: inline-block; font-size: 9.5px; font-weight: bold; color: var(--pf-muted);
+    background: var(--pf-gray); border: 1px solid var(--pf-border); padding: 1px 6px; border-radius: 999px; margin-left: 4px;
+  }
+
+  .dev-note {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--pf-gray);
+    border: 1px dashed var(--pf-border);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--pf-muted);
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="top-brand">
+    <div class="mark">CM</div>
+    <div>
+      <h1>Conference Manager</h1>
+      <p>Set up a new conference in a few minutes</p>
+    </div>
+  </div>
+
+  <div id="wizard"></div>
+</div>
+
+<script>
+// Point this at your platform worker once it's deployed (see
+// platform-setup-guide.md). Left empty for now, so the form can be built
+// and tested end to end before the backend exists.
+const PLATFORM_WORKER_URL = "cm-worker.conferenceplanner.workers.dev
+";
+
+// Replaces an element's HTML while preserving focus and cursor position in
+// whichever input the user is currently typing in. Without this, every
+// re-render recreates the DOM from scratch and the browser drops focus —
+// which looks like "I can only type one letter before I have to click the
+// field again". Works purely structurally (by child-index path), so it
+// doesn't require every input to have a unique id — including inputs
+// inside dynamically repeated rows (sessions, quiz options, etc).
+const SELECTABLE_INPUT_TYPES = new Set(["text", "search", "url", "tel", "password"]);
+
+function getFocusPath(root, el) {
+  if (!root.contains(el)) return null;
+  const path = [];
+  let node = el;
+  while (node !== root) {
+    const parent = node.parentElement;
+    if (!parent) return null;
+    path.unshift(Array.prototype.indexOf.call(parent.children, node));
+    node = parent;
+  }
+  return path;
+}
+
+function getElementByPath(root, path) {
+  let node = root;
+  for (const idx of path) {
+    if (!node || !node.children || idx < 0 || idx >= node.children.length) return null;
+    node = node.children[idx];
+  }
+  return node;
+}
+
+function setHtmlPreservingFocus(el, html) {
+  const active = document.activeElement;
+  const path = active ? getFocusPath(el, active) : null;
+  let selStart = null, selEnd = null;
+  let needsCaretEndFallback = false;
+  if (path) {
+    const tag = active.tagName.toLowerCase();
+    const type = (active.type || "text").toLowerCase();
+    if (tag === "textarea" || SELECTABLE_INPUT_TYPES.has(type)) {
+      try { selStart = active.selectionStart; selEnd = active.selectionEnd; } catch (e) { needsCaretEndFallback = true; }
+    } else {
+      // number/date/time/etc — the Selection API isn't supported at all,
+      // so the best we can do is put the caret at the end after re-render
+      // (matches how people normally type: left to right).
+      needsCaretEndFallback = true;
+    }
+  }
+
+  el.innerHTML = html;
+
+  if (path) {
+    const restored = getElementByPath(el, path);
+    if (restored && typeof restored.focus === "function") {
+      restored.focus();
+      if (selStart !== null && typeof restored.setSelectionRange === "function") {
+        try { restored.setSelectionRange(selStart, selEnd); } catch (e) { /* unsupported, ignore */ }
+      } else if (needsCaretEndFallback && "value" in restored && typeof restored.setSelectionRange === "function") {
+        // Temporarily swap to a plain text box just long enough to move the
+        // caret to the end — number/date/time inputs refuse this call
+        // directly, but a text input with the same value accepts it fine.
+        const originalType = restored.type;
+        try {
+          restored.type = "text";
+          const len = restored.value.length;
+          restored.setSelectionRange(len, len);
+        } catch (e) { /* give up silently */ }
+        finally { restored.type = originalType; }
+      }
+    }
+  }
+}
+
+const THEME_COLORS = [
+  { name: "Indigo", hex: "#3E4C9C" },
+  { name: "Blue",   hex: "#004B87" },
+  { name: "Teal",   hex: "#0F7A6E" },
+  { name: "Green",  hex: "#1E7A3D" },
+  { name: "Purple", hex: "#6B3FA0" },
+  { name: "Rose",   hex: "#B3266B" },
+  { name: "Amber",  hex: "#B36A1E" },
+  { name: "Slate",  hex: "#3A4552" },
+];
+
+let form = {
+  name: "",
+  slug: "",
+  slugManuallyEdited: false,
+  themeColor: THEME_COLORS[0].hex,
+  startDate: "",
+  endDate: "",
+  contactEmail: "",
+  adminPin: "",
+  participantCount: 100,
+  modules: { quiz: false },
+};
+
+let sessions = [
+  { date: "", time: "", title: "", speaker: "" },
+];
+
+let created = false;
+let creating = false;
+let createResult = null;
+
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function render() {
+  const el = document.getElementById("wizard");
+
+  if (created && createResult) {
+    const participantLink = `${location.origin}${location.pathname.replace('create.html','')}?conf=${form.slug}`;
+    const organizerLink = `${participantLink}&admin=1`;
+    setHtmlPreservingFocus(el, `
+      <div class="result-card">
+        <div class="check">✓</div>
+        <h2>Conference created</h2>
+        <p>Share the participant link with attendees. Keep the organizer
+        link and PIN private — that's how you'll edit this conference later.</p>
+
+        <div class="link-box">
+          <div class="link-label">Participant link</div>
+          <div class="link-value" id="participantLinkVal">${escHtml(participantLink)}</div>
+          <button class="copy-btn" onclick="copyText('participantLinkVal')">Copy</button>
+        </div>
+
+        <div class="link-box">
+          <div class="link-label">Organizer link (keep private)</div>
+          <div class="link-value" id="organizerLinkVal">${escHtml(organizerLink)}</div>
+          <button class="copy-btn" onclick="copyText('organizerLinkVal')">Copy</button>
+        </div>
+
+        <div class="link-box">
+          <div class="link-label">Your admin PIN</div>
+          <div class="link-value">${escHtml(form.adminPin)}</div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  const slugValid = /^[a-z0-9-]{3,40}$/.test(form.slug);
+  const pinValid = /^\d{4,6}$/.test(form.adminPin);
+  const nameValid = form.name.trim().length >= 3;
+  const datesValid = form.startDate && form.endDate && form.startDate <= form.endDate;
+  const sessionsValid = sessions.some(s => s.title.trim().length > 0);
+  const ready = slugValid && pinValid && nameValid && datesValid && sessionsValid && !creating;
+
+  setHtmlPreservingFocus(el, `
+    <div class="card">
+      <h2>Conference details</h2>
+      <div class="card-sub">This is the basic information attendees will see.</div>
+
+      <div class="field-group">
+        <label for="fName">Conference name</label>
+        <input type="text" id="fName" placeholder="e.g. Nordic Cardiology Symposium 2027" value="${escHtml(form.name)}" oninput="onName(this.value)">
+        <div class="slug-preview">${form.slug ? "Link will be: " + location.origin + location.pathname.replace('create.html','') + "?conf=" + form.slug : ""}</div>
+      </div>
+
+      <div class="field-group">
+        <label for="fSlug">Short ID (used in the link)</label>
+        <input type="text" id="fSlug" placeholder="e.g. cardio2027" value="${escHtml(form.slug)}" oninput="onSlug(this.value)">
+        <div class="field-hint ${form.slug && !slugValid ? "error" : ""}">
+          ${form.slug && !slugValid ? "Lowercase letters, numbers, and hyphens only, 3–40 characters." : "Lowercase letters, numbers, and hyphens only. Must be unique."}
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-group">
+          <label for="fStart">Start date</label>
+          <input type="date" id="fStart" value="${escHtml(form.startDate)}" oninput="onField('startDate', this.value)">
+        </div>
+        <div class="field-group">
+          <label for="fEnd">End date</label>
+          <input type="date" id="fEnd" value="${escHtml(form.endDate)}" oninput="onField('endDate', this.value)">
+        </div>
+      </div>
+      <div class="field-hint error" style="margin-top:-8px;margin-bottom:12px;">${!datesValid && form.startDate && form.endDate ? "End date must be on or after the start date." : ""}</div>
+
+      <div class="field-group">
+        <label for="fEmail">Contact email (shown to participants, optional)</label>
+        <input type="email" id="fEmail" placeholder="organizer@hospital.dk" value="${escHtml(form.contactEmail)}" oninput="onField('contactEmail', this.value)">
+      </div>
+
+      <div class="field-group">
+        <label>Theme color</label>
+        <div class="color-swatches">
+          ${THEME_COLORS.map(c => `
+            <div class="color-swatch ${form.themeColor === c.hex ? "selected" : ""}"
+                 style="background:${c.hex};" title="${c.name}"
+                 onclick="onField('themeColor','${c.hex}')">${form.themeColor === c.hex ? "✓" : ""}</div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Access</h2>
+      <div class="card-sub">Participants log in with a personal number. You use a PIN to edit this conference later.</div>
+
+      <div class="field-group">
+        <label for="fCount">Number of participant numbers to open</label>
+        <input type="number" id="fCount" min="1" max="999" value="${form.participantCount}" oninput="onField('participantCount', parseInt(this.value)||0)">
+        <div class="field-hint">Participants will log in with any number from 1 to this value.</div>
+      </div>
+
+      <div class="field-group">
+        <label for="fPin">Your admin PIN (4–6 digits)</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="fPin" placeholder="••••" maxlength="6" value="${escHtml(form.adminPin)}" oninput="onPin(this.value)">
+        <div class="field-hint ${form.adminPin && !pinValid ? "error" : ""}">
+          ${form.adminPin && !pinValid ? "Must be 4–6 digits." : "You'll need this to edit the conference or reset participant tests later."}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Modules</h2>
+      <div class="card-sub">Optional extras you can turn on for this conference. You can change this later too.</div>
+
+      <div class="module-row">
+        <label class="module-toggle">
+          <input type="checkbox" ${form.modules.quiz ? "checked" : ""} onchange="onModuleToggle('quiz', this.checked)">
+          <div>
+            <div class="module-name">Test / Quiz</div>
+            <div class="module-desc">Attendees answer multiple-choice questions; graded automatically, with a pass/fail shown right after they submit. You add the questions after creating the conference.</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="module-row disabled">
+        <label class="module-toggle">
+          <input type="checkbox" disabled>
+          <div>
+            <div class="module-name">Station rotation <span class="soon-badge">Coming soon</span></div>
+            <div class="module-desc">For hands-on courses with physical stations attendees rotate between.</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Schedule</h2>
+      <div class="card-sub">Add the sessions attendees will see. You can edit this anytime after creating the conference.</div>
+
+      ${sessions.map((s, i) => `
+        <div class="session-row">
+          ${sessions.length > 1 ? `<button class="remove-btn" onclick="removeSession(${i})">✕</button>` : ""}
+          <div class="field-row">
+            <div>
+              <span class="mini-label">Date</span>
+              <input type="date" value="${escHtml(s.date)}" oninput="onSessionField(${i},'date',this.value)">
+            </div>
+            <div>
+              <span class="mini-label">Time</span>
+              <input type="time" value="${escHtml(s.time)}" oninput="onSessionField(${i},'time',this.value)">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <span class="mini-label">Session title</span>
+              <input type="text" placeholder="e.g. Opening keynote" value="${escHtml(s.title)}" oninput="onSessionField(${i},'title',this.value)">
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <span class="mini-label">Speaker / location (optional)</span>
+              <input type="text" placeholder="e.g. Dr. Jane Smith, Main Hall" value="${escHtml(s.speaker)}" oninput="onSessionField(${i},'speaker',this.value)">
+            </div>
+          </div>
+        </div>
+      `).join("")}
+
+      <button class="add-session-btn" onclick="addSession()">+ Add session</button>
+    </div>
+
+    <button class="submit-btn ${ready ? "ready" : ""}" ${ready ? "" : "disabled"} onclick="submitConference()">
+      ${creating ? "Creating..." : "Create conference"}
+    </button>
+
+    <div class="dev-note">
+      <b>Note:</b> ${PLATFORM_WORKER_URL
+        ? "Submitting will save this conference to the platform backend."
+        : "No backend connected yet (PLATFORM_WORKER_URL is empty) — submitting will only simulate creation (logged to the browser console) until the backend is set up."}
+    </div>
+  `);
+}
+
+function onName(val) {
+  form.name = val;
+  if (!form.slugManuallyEdited) {
+    form.slug = slugify(val);
+  }
+  render();
+}
+
+function onSlug(val) {
+  form.slugManuallyEdited = true;
+  form.slug = slugify(val);
+  render();
+}
+
+function onField(key, val) {
+  form[key] = val;
+  render();
+}
+
+function onPin(val) {
+  form.adminPin = val.replace(/\D/g, "").slice(0, 6);
+  render();
+}
+
+function onModuleToggle(key, checked) {
+  form.modules[key] = checked;
+  render();
+}
+
+function addSession() {
+  sessions.push({ date: "", time: "", title: "", speaker: "" });
+  render();
+}
+
+function removeSession(i) {
+  sessions.splice(i, 1);
+  render();
+}
+
+function onSessionField(i, key, val) {
+  sessions[i][key] = val;
+  // Avoid full re-render on every keystroke in text fields so focus isn't
+  // lost — only re-render when it could affect validity (title determines
+  // whether the form is submittable).
+  if (key === "title") { render(); return; }
+}
+
+function submitConference() {
+  creating = true;
+  render();
+
+  const payload = {
+    name: form.name.trim(),
+    slug: form.slug,
+    themeColor: form.themeColor,
+    startDate: form.startDate,
+    endDate: form.endDate,
+    contactEmail: form.contactEmail.trim(),
+    adminPin: form.adminPin,
+    participantCount: form.participantCount,
+    modules: form.modules,
+    sessions: sessions.filter(s => s.title.trim().length > 0),
+  };
+
+  if (!PLATFORM_WORKER_URL) {
+    console.log("Simulated conference creation (PLATFORM_WORKER_URL is not set yet):", payload);
+    setTimeout(() => {
+      creating = false;
+      created = true;
+      createResult = { ok: true };
+      render();
+    }, 300);
+    return;
+  }
+
+  fetch(`${PLATFORM_WORKER_URL}/conf/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+    .then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("Server error (" + res.status + ")"));
+      creating = false;
+      created = true;
+      createResult = data;
+      render();
+    })
+    .catch((err) => {
+      creating = false;
+      render();
+      alert("Couldn't create the conference: " + err.message);
+    });
+}
+
+function copyText(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+}
+
+function escHtml(str) {
+  return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+render();
+</script>
+
+</body>
+</html>
