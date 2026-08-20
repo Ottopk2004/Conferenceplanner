@@ -131,6 +131,16 @@
   .info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-top:12px; }
   .info-cell span { display:block; font-size:10px; color:var(--pf-muted); text-transform:uppercase; font-weight:bold; }
   .info-cell strong { display:block; margin-top:3px; }
+  .organizer-module { border:2px solid #cfdae3; border-radius:12px; margin-bottom:12px; overflow:hidden; }
+  .organizer-module summary { cursor:pointer; padding:14px 16px; background:var(--pf-theme-light); color:var(--pf-theme); font-weight:bold; }
+  .organizer-module-body { padding:16px; }
+  .next-up-card { color:#fff; border-radius:18px; padding:26px 28px; margin-bottom:22px; background:#c4145a; }
+  .next-up-card .next-label { font-size:12px; font-weight:bold; letter-spacing:.14em; margin-bottom:12px; opacity:.9; }
+  .next-up-card h2 { font-size:26px; line-height:1.15; margin-bottom:8px; color:#fff; }
+  .next-up-card .next-time { font-size:15px; font-weight:bold; line-height:1.45; }
+  .next-up-meta { display:flex; flex-wrap:wrap; gap:24px; margin-top:18px; }
+  .next-up-meta span { display:block; font-size:10px; font-weight:bold; letter-spacing:.06em; opacity:.75; }
+  .next-up-meta strong { display:block; font-size:16px; margin-top:2px; }
 
   .day-group { margin-bottom: 16px; }
   .day-label {
@@ -355,6 +365,7 @@ let pinError = "";
 let editMeta = null;
 let editSessions = null;
 let editModuleContent = null;
+let editOpenModule = '';
 let saveStatus = "";
 let saveStatusIsError = false;
 
@@ -366,6 +377,7 @@ let quizAnswers = {};
 let quizStatus = null;      // { locked, submittedAt, passed, scorePct } from server
 let quizSubmitting = false;
 let quizResult = null;      // result returned right after a successful submit
+let handsOnRefreshTimer = null;
 
 // ── Quiz module state (organizer side) ────────────────────────────────
 let editQuizQuestions = null;
@@ -521,6 +533,7 @@ function render() {
         ${renderParticipantModule(participantTab)}
       </div>
     `);
+    scheduleHandsOnRefresh();
     return;
   }
 
@@ -614,17 +627,29 @@ function bucketMembers(bucket,total,buckets,offset=0){const out=[];for(let p=1;p
 function minutesOf(t){const m=String(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;}
 function timeOf(m){return `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;}
 function renderHandsOnAssignment(c){
-  const stations=(c.stations||[]).slice(0,Number(c.stationCount)||0); if(!stations.length)return emptyModule();
-  const n=stations.length,start=minutesOf(c.startTime),end=minutesOf(c.endTime),step=Number(c.rotationMinutes)||30;
-  if(mode==='faculty'){
-    const facultyPosition=Number(loginNr)-999, total=Number(confData.meta.facultyCount)||0, stationIndex=balancedBucket(facultyPosition,total,n), s=stations[stationIndex]||{};
-    const colleagues=bucketMembers(stationIndex,total,n,999);
-    return `<div class="info-card"><h3>Your station: ${escHtml(s.name||`Station ${stationIndex+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Date</span><strong>${escHtml(c.date||'TBA')}</strong></div><div class="info-cell"><span>Time</span><strong>${escHtml(c.startTime||'')}–${escHtml(c.endTime||'')}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(s.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(s.stand||'TBA')}</strong></div></div><p style="margin-top:14px"><strong>Faculty at this station:</strong> ${colleagues.map(x=>'#'+x).join(', ')}</p></div>`;
-  }
-  const total=Number(confData.meta.participantCount)||0, group=balancedBucket(Number(loginNr),total,n), members=bucketMembers(group,total,n);
-  let cards=''; for(let r=0;r<n;r++){const from=start+r*step,to=Math.min(from+step,end),station=stations[(group+r)%n]||{};if(from>=end)break;cards+=`<div class="info-card"><h3>${escHtml(station.name||`Station ${(group+r)%n+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${timeOf(from)}–${timeOf(to)}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(station.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(station.stand||'TBA')}</strong></div></div></div>`;}
-  return `<div class="info-card" style="background:var(--pf-theme-light)"><h3>Group ${group+1} of ${n}</h3><p>Participants: ${members.map(x=>'#'+x).join(', ')}</p></div>${cards}`;
+  const sessions=normalizeDisplayHandsOn(c);if(!sessions.length)return emptyModule();
+  if(mode==='faculty')return sessions.map((hs,si)=>renderFacultyHandsOnSession(hs,si)).join('');
+  return `${renderNextUpAcrossSessions(sessions)}${sessions.map((hs,si)=>renderParticipantHandsOnSession(hs,si)).join('')}`;
 }
+function normalizeDisplayHandsOn(c){const sessions=Array.isArray(c.sessions)?c.sessions:(c.date?[{date:c.date,startTime:c.startTime,endTime:c.endTime,rotationMinutes:c.rotationMinutes,stationCount:c.stationCount,stations:c.stations||[]}]:[]);return sessions.slice().sort((a,b)=>`${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));}
+function sessionDates(hs){const base=hs.date?new Date(`${hs.date}T00:00:00`):null;if(!base||isNaN(base))return null;const start=minutesOf(hs.startTime),end=minutesOf(hs.endTime),from=new Date(base),to=new Date(base);from.setHours(Math.floor(start/60),start%60,0,0);to.setHours(Math.floor(end/60),end%60,0,0);return {base,from,to,start,end};}
+function renderFacultyHandsOnSession(hs,sessionIndex){const stations=(hs.stations||[]).slice(0,Number(hs.stationCount)||0),n=stations.length;if(!n)return '';const facultyPosition=Number(loginNr)-999,total=Number(confData.meta.facultyCount)||0,baseBucket=balancedBucket(facultyPosition,total,n),stationIndex=(baseBucket+sessionIndex)%n,s=stations[stationIndex]||{};const originalBucket=(stationIndex-sessionIndex+n)%n,colleagues=bucketMembers(originalBucket,total,n,999);return `<div class="day-label" style="margin-top:16px">${escHtml(hs.date||`Session ${sessionIndex+1}`)}</div><div class="info-card"><h3>Your station: ${escHtml(s.name||`Station ${stationIndex+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${escHtml(hs.startTime||'')}–${escHtml(hs.endTime||'')}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(s.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(s.stand||'TBA')}</strong></div></div><p style="margin-top:14px"><strong>Faculty at this station:</strong> ${colleagues.map(x=>'#'+x).join(', ')}</p></div>`;}
+function renderParticipantHandsOnSession(hs,sessionIndex){const stations=(hs.stations||[]).slice(0,Number(hs.stationCount)||0),n=stations.length;if(!n)return '';const start=minutesOf(hs.startTime),end=minutesOf(hs.endTime),step=Number(hs.rotationMinutes)||30,total=Number(confData.meta.participantCount)||0,group=balancedBucket(Number(loginNr),total,n);let cards='';for(let r=0;r<n;r++){const from=start+r*step,to=Math.min(from+step,end),station=stations[(group+sessionIndex+r)%n]||{};if(from>=end)break;cards+=`<div class="info-card"><h3>${escHtml(station.name||'Station')}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${timeOf(from)}–${timeOf(to)}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(station.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(station.stand||'TBA')}</strong></div></div></div>`;}return `<div class="day-label" style="margin-top:18px">${escHtml(hs.date||`Session ${sessionIndex+1}`)}</div>${cards}`;}
+function renderNextUpAcrossSessions(sessions){const now=new Date();let chosen=null;for(let si=0;si<sessions.length;si++){const d=sessionDates(sessions[si]);if(!d)continue;if(now<d.to){chosen={hs:sessions[si],si,d};break;}}if(!chosen)return `<div class="next-up-card" style="background:#41708f"><div class="next-label">HANDS ON</div><h2>All rotations completed</h2></div>`;const hs=chosen.hs,stations=(hs.stations||[]).slice(0,Number(hs.stationCount)||0),n=stations.length,step=Number(hs.rotationMinutes)||30,total=Number(confData.meta.participantCount)||0,group=balancedBucket(Number(loginNr),total,n);return renderNextUpCard(hs,stations,group,n,chosen.d.start,chosen.d.end,step,chosen.si);}
+function renderNextUpCard(c,stations,group,n,start,end,step,sessionIndex=0){
+  const now=new Date(), base=c.date?new Date(`${c.date}T00:00:00`):null;
+  if(!base||isNaN(base)||!n)return `<div class="next-up-card"><div class="next-label">NEXT UP</div><h2>Hands-on schedule TBA</h2></div>`;
+  const dayStart=new Date(base);dayStart.setHours(Math.floor(start/60),start%60,0,0);
+  const finish=new Date(base);finish.setHours(Math.floor(end/60),end%60,0,0);
+  let rotation=Math.floor((now-dayStart)/(step*60000));
+  let status=''; if(now<dayStart){rotation=0;status=`Starts ${relativeTime(dayStart-now)}`;}else if(now>=finish||rotation>=n){return `<div class="next-up-card" style="background:#41708f"><div class="next-label">HANDS ON</div><h2>All rotations completed</h2><div class="next-time">Group ${group+1} of ${n}</div></div>`;}else status='Happening now';
+  const from=start+rotation*step,to=Math.min(from+step,end),stationIndex=(group+sessionIndex+rotation)%n,s=stations[stationIndex]||{};
+  const colors=['#f5a619','#c4145a','#0b62a4','#bb162b','#16805b','#6b3fa0'];
+  return `<div class="next-up-card" style="background:${colors[stationIndex%colors.length]}"><div class="next-label">${now<dayStart?'NEXT UP':'CURRENT ROTATION'}</div><h2>${escHtml(s.name||`Station ${stationIndex+1}`)} · ${escHtml(s.room||'Room TBA')}</h2><div class="next-time">${formatHandsOnDate(base)}, ${timeOf(from)}–${timeOf(to)} · ${escHtml(s.stand||`Stand ${stationIndex+1}`)} · ${status}</div><div class="next-up-meta"><div><span>COURSE</span><strong>${escHtml(confData.meta.name)}</strong></div><div><span>GROUP</span><strong>${group+1} of ${n}</strong></div><div><span>STATION</span><strong>${stationIndex+1}</strong></div></div></div>`;
+}
+function relativeTime(ms){const mins=Math.max(0,Math.ceil(ms/60000)),days=Math.floor(mins/1440),hours=Math.floor((mins%1440)/60),rest=mins%60;if(days)return `in ${days}d ${hours}h`;if(hours)return `in ${hours}h ${rest}m`;return `in ${rest}m`;}
+function formatHandsOnDate(d){return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long'});}
+function scheduleHandsOnRefresh(){if(handsOnRefreshTimer){clearTimeout(handsOnRefreshTimer);handsOnRefreshTimer=null;}if(participantTab==='handsOn'&&mode==='participant'){handsOnRefreshTimer=setTimeout(()=>{if(participantTab==='handsOn'&&mode==='participant')render();},60000);}}
 
 function onPinInput(v) { pinInput = v.replace(/\D/g, "").slice(0, 6); }
 
@@ -1051,22 +1076,31 @@ function onToggleModule(key, checked) {
 
 function ensureModuleContentDefaults() {
   const defaults = {
-    handsOn:{title:'Hands on',intro:'',date:'',startTime:'09:00',endTime:'11:30',rotationMinutes:30,stationCount:5,stations:Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:'',stand:`Stand ${i+1}`}))}, map:{title:'Venue map',intro:'',address:'',image:''},
+    handsOn:{title:'Hands on',intro:'',sessions:[newEditHandsOnSession()]}, map:{title:'Venue map',intro:'',address:'',image:''},
     industry:{title:'Industry',intro:'',items:'',image:''}, quiz:{title:'Final test',intro:'Answer all questions. The test can only be taken once.'}, contact:{title:'Contact',intro:'',coordinatorName:'',coordinatorPhone:'',coordinatorEmail:'',supportName:'',supportPhone:'',supportEmail:'',image:''}
   };
-  for (const key of Object.keys(defaults)) editModuleContent[key] = Object.assign({}, defaults[key], editModuleContent[key] || {});
+  for (const key of Object.keys(defaults)) {
+    const existing=editModuleContent[key]||{};
+    if(key==='handsOn'&&!Array.isArray(existing.sessions)&&existing.date) existing.sessions=[{date:existing.date,startTime:existing.startTime||'09:00',endTime:existing.endTime||'11:30',rotationMinutes:existing.rotationMinutes||30,stationCount:existing.stationCount||5,stations:existing.stations||newEditHandsOnSession().stations}];
+    editModuleContent[key]=Object.assign({},defaults[key],existing);
+  }
 }
 function onEditModuleContent(module,key,value) { editModuleContent[module][key] = value; }
-function onEditHandsOnCount(value){const c=editModuleContent.handsOn,count=Math.max(1,Math.min(30,parseInt(value)||1));c.stationCount=count;c.stations=c.stations||[];while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});c.stations=c.stations.slice(0,count);rerenderOrganizerScroll();}
-function onEditHandsOnStation(i,key,value){editModuleContent.handsOn.stations[i][key]=value;}
+function newEditHandsOnSession(){return {date:'',startTime:'09:00',endTime:'11:30',rotationMinutes:30,stationCount:5,stations:Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:'',stand:`Stand ${i+1}`}))};}
+function normalizeEditHandsOn(c){if(!Array.isArray(c.sessions))c.sessions=[{date:c.date||'',startTime:c.startTime||'09:00',endTime:c.endTime||'11:30',rotationMinutes:c.rotationMinutes||30,stationCount:c.stationCount||5,stations:c.stations||newEditHandsOnSession().stations}];return c;}
+function addEditHandsOnSession(){editModuleContent.handsOn.sessions.push(newEditHandsOnSession());rerenderOrganizerScroll();}
+function removeEditHandsOnSession(i){if(editModuleContent.handsOn.sessions.length>1)editModuleContent.handsOn.sessions.splice(i,1);rerenderOrganizerScroll();}
+function onEditHandsOnCount(si,value){const c=editModuleContent.handsOn.sessions[si],count=Math.max(1,Math.min(30,parseInt(value)||1));c.stationCount=count;c.stations=c.stations||[];while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});c.stations=c.stations.slice(0,count);rerenderOrganizerScroll();}
+function onEditHandsOnSession(si,key,value){editModuleContent.handsOn.sessions[si][key]=value;}
+function onEditHandsOnStation(si,i,key,value){editModuleContent.handsOn.sessions[si].stations[i][key]=value;}
 function renderOrganizerModuleContent(module) {
   const c=editModuleContent[module];
   let specific='';
-  if(module==='handsOn') specific=`<div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(c.date)}" oninput="onEditModuleContent('handsOn','date',this.value)"></div><div class="field-group"><label>Stations</label><input type="number" min="1" max="30" value="${c.stationCount}" onchange="onEditHandsOnCount(this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(c.startTime)}" oninput="onEditModuleContent('handsOn','startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(c.endTime)}" oninput="onEditModuleContent('handsOn','endTime',this.value)"></div><div class="field-group"><label>Minutes/rotation</label><input type="number" min="5" step="5" value="${c.rotationMinutes}" oninput="onEditModuleContent('handsOn','rotationMinutes',parseInt(this.value)||30)"></div></div>${(c.stations||[]).map((s,i)=>`<div class="session-edit-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(s.name)}" oninput="onEditHandsOnStation(${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onEditHandsOnStation(${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onEditHandsOnStation(${i},'stand',this.value)"></div></div></div>`).join('')}`;
+  if(module==='handsOn'){normalizeEditHandsOn(c);specific=`${c.sessions.map((hs,si)=>`<div class="session-edit-row">${c.sessions.length>1?`<button class="remove-btn" onclick="removeEditHandsOnSession(${si})">✕</button>`:''}<h3 style="color:var(--pf-theme);margin-bottom:10px">Session ${si+1}</h3><div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(hs.date)}" oninput="onEditHandsOnSession(${si},'date',this.value)"></div><div class="field-group"><label>Stations</label><input type="number" min="1" max="30" value="${hs.stationCount}" onchange="onEditHandsOnCount(${si},this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(hs.startTime)}" oninput="onEditHandsOnSession(${si},'startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(hs.endTime)}" oninput="onEditHandsOnSession(${si},'endTime',this.value)"></div><div class="field-group"><label>Minutes</label><input type="number" min="5" step="5" value="${hs.rotationMinutes}" oninput="onEditHandsOnSession(${si},'rotationMinutes',parseInt(this.value)||30)"></div></div>${(hs.stations||[]).map((s,i)=>`<div class="session-edit-row"><span class="mini-label">Station ${i+1}</span><input value="${escHtml(s.name)}" oninput="onEditHandsOnStation(${si},${i},'name',this.value)"><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onEditHandsOnStation(${si},${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onEditHandsOnStation(${si},${i},'stand',this.value)"></div></div></div>`).join('')}</div>`).join('')}<button class="add-btn" onclick="addEditHandsOnSession()">+ Add another session</button>`;}
   if(module==='map') specific=`<div class="field-group"><label>Address</label><input value="${escHtml(c.address)}" oninput="onEditModuleContent('map','address',this.value)"></div>${renderOrganizerImage('map')}`;
   if(module==='industry') specific=`<div class="field-group"><label>Partners — one per line: Name | Description | Website</label><textarea oninput="onEditModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderOrganizerImage('industry')}`;
   if(module==='contact') specific=`<div class="field-group"><label>Coordinator name</label><input value="${escHtml(c.coordinatorName)}" oninput="onEditModuleContent('contact','coordinatorName',this.value)"></div><div class="field-row"><div class="field-group"><label>Phone</label><input value="${escHtml(c.coordinatorPhone)}" oninput="onEditModuleContent('contact','coordinatorPhone',this.value)"></div><div class="field-group"><label>Email</label><input value="${escHtml(c.coordinatorEmail)}" oninput="onEditModuleContent('contact','coordinatorEmail',this.value)"></div></div><div class="field-group"><label>Technical support name</label><input value="${escHtml(c.supportName)}" oninput="onEditModuleContent('contact','supportName',this.value)"></div><div class="field-row"><div class="field-group"><label>Support phone</label><input value="${escHtml(c.supportPhone)}" oninput="onEditModuleContent('contact','supportPhone',this.value)"></div><div class="field-group"><label>Support email</label><input value="${escHtml(c.supportEmail)}" oninput="onEditModuleContent('contact','supportEmail',this.value)"></div></div>${renderOrganizerImage('contact')}`;
-  return `<div class="info-card"><div class="field-group"><label>Heading</label><input value="${escHtml(c.title)}" oninput="onEditModuleContent('${module}','title',this.value)"></div><div class="field-group"><label>Introduction</label><textarea oninput="onEditModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>${specific}</div>`;
+  return `<details class="organizer-module" ${editOpenModule===module?'open':''} ontoggle="if(this.open)editOpenModule='${module}';else if(editOpenModule==='${module}')editOpenModule='' "><summary>Edit ${escHtml(c.title||module)}</summary><div class="organizer-module-body"><div class="field-group"><label>Heading</label><input value="${escHtml(c.title)}" oninput="onEditModuleContent('${module}','title',this.value)"></div><div class="field-group"><label>Introduction</label><textarea oninput="onEditModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>${specific}</div></details>`;
 }
 function renderOrganizerImage(module){const img=editModuleContent[module].image;return `<div class="field-group"><label>Image (maximum 1 MB)</label><input type="file" accept="image/*" onchange="onEditModuleImage('${module}',this.files[0])">${img?`<img class="content-image" src="${img}" alt="Preview"><button class="pin-btn" type="button" onclick="editModuleContent['${module}'].image='';rerenderOrganizerScroll()">Remove image</button>`:''}</div>`;}
 function onEditModuleImage(module,file){if(!file)return;if(file.size>1024*1024){alert('The image must be smaller than 1 MB.');return;}const reader=new FileReader();reader.onload=()=>{editModuleContent[module].image=reader.result;rerenderOrganizerScroll();};reader.readAsDataURL(file);}
@@ -1245,7 +1279,7 @@ function saveOrganizerChanges() {
       rerenderOrganizerScroll();
     });
 }
-function validHandsOnConfig(c){return !!c&&!!c.date&&minutesOf(c.endTime)>minutesOf(c.startTime)&&(minutesOf(c.endTime)-minutesOf(c.startTime))>=Number(c.stationCount||0)*Number(c.rotationMinutes||0);}
+function validHandsOnConfig(c){if(!c)return false;const sessions=normalizeEditHandsOn(c).sessions;return sessions.length>0&&sessions.every(s=>!!s.date&&minutesOf(s.endTime)>minutesOf(s.startTime)&&(minutesOf(s.endTime)-minutesOf(s.startTime))>=Number(s.stationCount||0)*Number(s.rotationMinutes||0));}
 
 function escHtml(str) {
   return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");

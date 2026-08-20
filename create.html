@@ -94,7 +94,9 @@
   }
   .field-group textarea { width:100%; min-height:96px; resize:vertical; padding:10px 12px; border:2px solid var(--pf-border); border-radius:8px; font:14px inherit; }
   .field-group textarea:focus { border-color:var(--pf-indigo); outline:none; }
-  .module-editor { margin:-2px 0 14px; padding:16px; border:2px solid var(--pf-indigo); border-top:0; border-radius:0 0 12px 12px; background:#fff; }
+  .module-editor { margin:0 0 14px; padding:0; border:2px solid var(--pf-indigo); border-radius:12px; background:#fff; overflow:hidden; }
+  .module-editor summary { cursor:pointer; padding:14px 16px; color:var(--pf-indigo); font-weight:bold; background:var(--pf-indigo-light); }
+  .module-editor-body { padding:16px; }
   .module-editor .editor-title { color:var(--pf-indigo); font-weight:bold; font-size:13px; margin-bottom:12px; }
   .image-preview { max-width:100%; max-height:260px; display:block; border:2px solid var(--pf-border); border-radius:10px; margin-top:10px; }
   .remove-image-btn { margin-top:8px; padding:7px 10px; border:1px solid var(--pf-red); color:var(--pf-red); background:#fff; border-radius:7px; cursor:pointer; }
@@ -383,7 +385,7 @@ let form = {
   facultyCount: 20,
   modules: { handsOn: false, map: false, industry: false, quiz: false, contact: false },
   moduleContent: {
-    handsOn: { title: "Hands on", intro: "", date: "", startTime: "09:00", endTime: "11:30", rotationMinutes: 30, stationCount: 5, stations: Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:"",stand:`Stand ${i+1}`})) },
+    handsOn: { title: "Hands on", intro: "", sessions: [newHandsOnSession()] },
     map: { title: "Venue map", intro: "", address: "", image: "" },
     industry: { title: "Industry", intro: "", items: "", image: "" },
     quiz: { title: "Final test", intro: "Answer all questions. The test can only be taken once." },
@@ -398,6 +400,7 @@ let sessions = [
 let created = false;
 let creating = false;
 let createResult = null;
+let openModule = '';
 
 function cleanCode(str) {
   return str.toLowerCase().replace(/[^a-z]/g, "").slice(0, 12);
@@ -642,14 +645,19 @@ function onModuleContent(module, key, value) {
   form.moduleContent[module][key] = value;
   if(module==='handsOn' && ['date','startTime','endTime','rotationMinutes'].includes(key)) render();
 }
-function onHandsOnStationCount(value) {
-  const c=form.moduleContent.handsOn, count=Math.max(1,Math.min(30,parseInt(value)||1));
-  c.stationCount=count; c.stations=c.stations||[];
+function newHandsOnSession(){return {date:'',startTime:'09:00',endTime:'11:30',rotationMinutes:30,stationCount:5,stations:Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:'',stand:`Stand ${i+1}`}))};}
+function normalizeHandsOn(c){if(!Array.isArray(c.sessions))c.sessions=[{date:c.date||'',startTime:c.startTime||'09:00',endTime:c.endTime||'11:30',rotationMinutes:c.rotationMinutes||30,stationCount:c.stationCount||5,stations:c.stations||newHandsOnSession().stations}];return c;}
+function addHandsOnSession(){form.moduleContent.handsOn.sessions.push(newHandsOnSession());render();}
+function removeHandsOnSession(i){if(form.moduleContent.handsOn.sessions.length>1)form.moduleContent.handsOn.sessions.splice(i,1);render();}
+function onHandsOnStationCount(sessionIndex,value) {
+  const c=form.moduleContent.handsOn.sessions[sessionIndex], count=Math.max(1,Math.min(30,parseInt(value)||1));
+  c.stationCount=count;c.stations=c.stations||[];
   while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});
-  c.stations=c.stations.slice(0,count); render();
+  c.stations=c.stations.slice(0,count);render();
 }
-function onHandsOnStation(i,key,value){form.moduleContent.handsOn.stations[i][key]=value;}
-function validateHandsOn(c){const toMin=t=>{const m=String(t||'').match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;};return !!c.date&&toMin(c.endTime)>toMin(c.startTime)&&(toMin(c.endTime)-toMin(c.startTime))>=Number(c.stationCount||0)*Number(c.rotationMinutes||0);}
+function onHandsOnSession(i,key,value){form.moduleContent.handsOn.sessions[i][key]=value;render();}
+function onHandsOnStation(si,i,key,value){form.moduleContent.handsOn.sessions[si].stations[i][key]=value;}
+function validateHandsOn(c){const toMin=t=>{const m=String(t||'').match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;};normalizeHandsOn(c);return c.sessions.length>0&&c.sessions.every(s=>!!s.date&&toMin(s.endTime)>toMin(s.startTime)&&(toMin(s.endTime)-toMin(s.startTime))>=Number(s.stationCount||0)*Number(s.rotationMinutes||0));}
 
 function renderModuleEditor(module) {
   const c = form.moduleContent[module];
@@ -657,11 +665,7 @@ function renderModuleEditor(module) {
     <div class="field-group"><label>Tab heading</label><input type="text" value="${escHtml(c.title)}" oninput="onModuleContent('${module}','title',this.value)"></div>
     <div class="field-group"><label>Introduction</label><textarea placeholder="Information shown at the top of this section" oninput="onModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>`;
   let fields = '';
-  if (module === 'handsOn') fields = `
-    <div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(c.date)}" oninput="onModuleContent('handsOn','date',this.value)"></div><div class="field-group"><label>Number of stations</label><input type="number" min="1" max="30" value="${c.stationCount}" onchange="onHandsOnStationCount(this.value)"></div></div>
-    <div class="field-row"><div class="field-group"><label>Start time</label><input type="time" value="${escHtml(c.startTime)}" oninput="onModuleContent('handsOn','startTime',this.value)"></div><div class="field-group"><label>End time</label><input type="time" value="${escHtml(c.endTime)}" oninput="onModuleContent('handsOn','endTime',this.value)"></div><div class="field-group"><label>Minutes per rotation</label><input type="number" min="5" max="240" step="5" value="${c.rotationMinutes}" oninput="onModuleContent('handsOn','rotationMinutes',parseInt(this.value)||30)"></div></div>
-    <div class="field-hint ${validateHandsOn(c)?'':'error'}" style="margin-bottom:12px">${validateHandsOn(c)?'One participant group is created per station. Every group rotates through every station.':'The interval from start to end must fit every station: stations × minutes per rotation.'}</div>
-    ${(c.stations||[]).map((s,i)=>`<div class="session-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input type="text" value="${escHtml(s.name)}" oninput="onHandsOnStation(${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input type="text" value="${escHtml(s.room)}" oninput="onHandsOnStation(${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input type="text" value="${escHtml(s.stand)}" oninput="onHandsOnStation(${i},'stand',this.value)"></div></div></div>`).join('')}`;
+  if (module === 'handsOn') { normalizeHandsOn(c); fields = `${c.sessions.map((hs,si)=>`<div class="session-row">${c.sessions.length>1?`<button class="remove-btn" onclick="removeHandsOnSession(${si})">✕</button>`:''}<h3 style="color:var(--pf-indigo);margin-bottom:12px">Hands-on session ${si+1}</h3><div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(hs.date)}" oninput="onHandsOnSession(${si},'date',this.value)"></div><div class="field-group"><label>Number of stations</label><input type="number" min="1" max="30" value="${hs.stationCount}" onchange="onHandsOnStationCount(${si},this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(hs.startTime)}" oninput="onHandsOnSession(${si},'startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(hs.endTime)}" oninput="onHandsOnSession(${si},'endTime',this.value)"></div><div class="field-group"><label>Minutes/rotation</label><input type="number" min="5" step="5" value="${hs.rotationMinutes}" oninput="onHandsOnSession(${si},'rotationMinutes',parseInt(this.value)||30)"></div></div>${(hs.stations||[]).map((s,i)=>`<div class="session-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(s.name)}" oninput="onHandsOnStation(${si},${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onHandsOnStation(${si},${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onHandsOnStation(${si},${i},'stand',this.value)"></div></div></div>`).join('')}</div>`).join('')}<button type="button" class="add-session-btn" onclick="addHandsOnSession()">+ Add another Hands-on session</button><div class="field-hint ${validateHandsOn(c)?'':'error'}">Each session must fit stations × minutes per rotation.</div>`; }
   if (module === 'map') fields = `<div class="field-group"><label>Venue address</label><input type="text" value="${escHtml(c.address)}" oninput="onModuleContent('map','address',this.value)"></div>${renderImageField('map')}`;
   if (module === 'industry') fields = `<div class="field-group"><label>Industry partners</label><textarea placeholder="One card per line: Company name | Description | Website" oninput="onModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderImageField('industry')}`;
   if (module === 'contact') fields = `
@@ -669,7 +673,7 @@ function renderModuleEditor(module) {
     <div class="field-group"><label>Coordinator email</label><input type="email" value="${escHtml(c.coordinatorEmail)}" oninput="onModuleContent('contact','coordinatorEmail',this.value)"></div>
     <div class="field-row"><div class="field-group"><label>Technical support</label><input type="text" value="${escHtml(c.supportName)}" oninput="onModuleContent('contact','supportName',this.value)"></div><div class="field-group"><label>Support phone</label><input type="text" value="${escHtml(c.supportPhone)}" oninput="onModuleContent('contact','supportPhone',this.value)"></div></div>
     <div class="field-group"><label>Support email</label><input type="email" value="${escHtml(c.supportEmail)}" oninput="onModuleContent('contact','supportEmail',this.value)"></div>${renderImageField('contact')}`;
-  return `<div class="module-editor"><div class="editor-title">Edit ${escHtml(c.title || module)}</div>${common}${fields}</div>`;
+  return `<details class="module-editor" ${openModule===module?'open':''} ontoggle="if(this.open)openModule='${module}';else if(openModule==='${module}')openModule='' "><summary>Edit ${escHtml(c.title || module)}</summary><div class="module-editor-body">${common}${fields}</div></details>`;
 }
 
 function renderImageField(module) {
