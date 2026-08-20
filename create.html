@@ -276,8 +276,7 @@
 // Point this at your platform worker once it's deployed (see
 // platform-setup-guide.md). Left empty for now, so the form can be built
 // and tested end to end before the backend exists.
-const PLATFORM_WORKER_URL = "cm-worker.conferenceplanner.workers.dev
-";
+const PLATFORM_WORKER_URL = "";
 
 // Replaces an element's HTML while preserving focus and cursor position in
 // whichever input the user is currently typing in. Without this, every
@@ -366,13 +365,13 @@ const THEME_COLORS = [
 let form = {
   name: "",
   slug: "",
-  slugManuallyEdited: false,
   themeColor: THEME_COLORS[0].hex,
   startDate: "",
   endDate: "",
   contactEmail: "",
   adminPin: "",
   participantCount: 100,
+  facultyCount: 20,
   modules: { quiz: false },
 };
 
@@ -384,33 +383,38 @@ let created = false;
 let creating = false;
 let createResult = null;
 
-function slugify(str) {
-  return str
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
+function cleanCode(str) {
+  return str.toLowerCase().replace(/[^a-z]/g, "").slice(0, 12);
 }
 
 function render() {
   const el = document.getElementById("wizard");
 
   if (created && createResult) {
-    const participantLink = `${location.origin}${location.pathname.replace('create.html','')}?conf=${form.slug}`;
-    const organizerLink = `${participantLink}&admin=1`;
+    const code = form.slug.toUpperCase();
+    const loginUrl = `${location.origin}${location.pathname.replace('create.html','')}login.html`;
+    const organizerLink = `${location.origin}${location.pathname.replace('create.html','')}index.html?conf=${form.slug}&admin=1`;
     setHtmlPreservingFocus(el, `
       <div class="result-card">
         <div class="check">✓</div>
         <h2>Conference created</h2>
-        <p>Share the participant link with attendees. Keep the organizer
-        link and PIN private — that's how you'll edit this conference later.</p>
+        <p>Share the login code below with attendees and faculty. Keep the
+        organizer link and PIN private — that's how you'll edit this
+        conference later.</p>
 
         <div class="link-box">
-          <div class="link-label">Participant link</div>
-          <div class="link-value" id="participantLinkVal">${escHtml(participantLink)}</div>
-          <button class="copy-btn" onclick="copyText('participantLinkVal')">Copy</button>
+          <div class="link-label">Tell participants to go to ${escHtml(loginUrl)} and enter</div>
+          <div class="link-value" id="participantCodeVal">${escHtml(code)} + their number (1–${form.participantCount})</div>
+          <button class="copy-btn" onclick="copyText('participantCodeVal')">Copy</button>
         </div>
+
+        ${form.facultyCount > 0 ? `
+        <div class="link-box">
+          <div class="link-label">Tell faculty to enter</div>
+          <div class="link-value" id="facultyCodeVal">${escHtml(code)} + their number (1000–${1000 + form.facultyCount - 1})</div>
+          <button class="copy-btn" onclick="copyText('facultyCodeVal')">Copy</button>
+        </div>
+        ` : ""}
 
         <div class="link-box">
           <div class="link-label">Organizer link (keep private)</div>
@@ -427,7 +431,7 @@ function render() {
     return;
   }
 
-  const slugValid = /^[a-z0-9-]{3,40}$/.test(form.slug);
+  const slugValid = /^[a-z]{2,12}$/.test(form.slug);
   const pinValid = /^\d{4,6}$/.test(form.adminPin);
   const nameValid = form.name.trim().length >= 3;
   const datesValid = form.startDate && form.endDate && form.startDate <= form.endDate;
@@ -442,15 +446,15 @@ function render() {
       <div class="field-group">
         <label for="fName">Conference name</label>
         <input type="text" id="fName" placeholder="e.g. Nordic Cardiology Symposium 2027" value="${escHtml(form.name)}" oninput="onName(this.value)">
-        <div class="slug-preview">${form.slug ? "Link will be: " + location.origin + location.pathname.replace('create.html','') + "?conf=" + form.slug : ""}</div>
       </div>
 
       <div class="field-group">
-        <label for="fSlug">Short ID (used in the link)</label>
-        <input type="text" id="fSlug" placeholder="e.g. cardio2027" value="${escHtml(form.slug)}" oninput="onSlug(this.value)">
+        <label for="fSlug">Login code</label>
+        <input type="text" id="fSlug" placeholder="e.g. HNUS" value="${escHtml(form.slug)}" oninput="onSlug(this.value)" style="text-transform:uppercase;">
         <div class="field-hint ${form.slug && !slugValid ? "error" : ""}">
-          ${form.slug && !slugValid ? "Lowercase letters, numbers, and hyphens only, 3–40 characters." : "Lowercase letters, numbers, and hyphens only. Must be unique."}
+          ${form.slug && !slugValid ? "2–12 letters only, no numbers or spaces." : "Letters only — this is what people type to log in, e.g. \u201cHNUS42\u201d. Must be unique, and can't be changed later."}
         </div>
+        <div class="slug-preview">${form.slug ? "Direct link: " + location.origin + location.pathname.replace('create.html','') + "index.html?conf=" + form.slug : ""}</div>
       </div>
 
       <div class="field-row">
@@ -484,12 +488,19 @@ function render() {
 
     <div class="card">
       <h2>Access</h2>
-      <div class="card-sub">Participants log in with a personal number. You use a PIN to edit this conference later.</div>
+      <div class="card-sub">Participants and faculty log in with your conference's login code plus a personal number, e.g. "${form.slug ? form.slug.toUpperCase() : "HNUS"}42". You use a PIN to edit this conference later.</div>
 
-      <div class="field-group">
-        <label for="fCount">Number of participant numbers to open</label>
-        <input type="number" id="fCount" min="1" max="999" value="${form.participantCount}" oninput="onField('participantCount', parseInt(this.value)||0)">
-        <div class="field-hint">Participants will log in with any number from 1 to this value.</div>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="fCount">Participant numbers</label>
+          <input type="number" id="fCount" min="1" max="999" value="${form.participantCount}" oninput="onField('participantCount', parseInt(this.value)||0)">
+          <div class="field-hint">Log in with 1–${form.participantCount}.</div>
+        </div>
+        <div class="field-group">
+          <label for="fFacultyCount">Faculty numbers</label>
+          <input type="number" id="fFacultyCount" min="0" max="999" value="${form.facultyCount}" oninput="onField('facultyCount', parseInt(this.value)||0)">
+          <div class="field-hint">Log in with 1000–${1000 + (form.facultyCount||0) - 1}.</div>
+        </div>
       </div>
 
       <div class="field-group">
@@ -575,15 +586,11 @@ function render() {
 
 function onName(val) {
   form.name = val;
-  if (!form.slugManuallyEdited) {
-    form.slug = slugify(val);
-  }
   render();
 }
 
 function onSlug(val) {
-  form.slugManuallyEdited = true;
-  form.slug = slugify(val);
+  form.slug = cleanCode(val);
   render();
 }
 
@@ -633,6 +640,7 @@ function submitConference() {
     contactEmail: form.contactEmail.trim(),
     adminPin: form.adminPin,
     participantCount: form.participantCount,
+    facultyCount: form.facultyCount,
     modules: form.modules,
     sessions: sessions.filter(s => s.title.trim().length > 0),
   };
