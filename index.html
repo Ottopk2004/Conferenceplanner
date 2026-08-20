@@ -400,8 +400,7 @@ function hexToLight(hex) {
 
 async function loadConference() {
   if (!confSlug) {
-    mode = "error-noslug";
-    render();
+    location.replace("login.html");
     return;
   }
 

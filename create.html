@@ -58,6 +58,12 @@
     padding: 22px;
     margin-bottom: 18px;
   }
+  details.card { padding:0; overflow:hidden; }
+  details.card > summary { cursor:pointer; list-style:none; padding:18px 22px; color:var(--pf-indigo); font-size:15px; font-weight:bold; background:#fff; }
+  details.card > summary::-webkit-details-marker { display:none; }
+  details.card > summary::after { content:'⌄'; float:right; font-size:20px; }
+  details.card[open] > summary::after { content:'⌃'; }
+  .create-section-body { padding:0 22px 22px; }
 
   .card h2 {
     font-size: 15px;
@@ -401,6 +407,7 @@ let created = false;
 let creating = false;
 let createResult = null;
 let openModule = '';
+let openCreateSection = 'details';
 
 function cleanCode(str) {
   return str.toLowerCase().replace(/[^a-z]/g, "").slice(0, 12);
@@ -463,8 +470,8 @@ function render() {
   const ready = slugValid && pinValid && nameValid && datesValid && sessionsValid && handsOnValid && !creating;
 
   setHtmlPreservingFocus(el, `
-    <div class="card">
-      <h2>Conference details</h2>
+    <details class="card" ${openCreateSection==='details'?'open':''} ontoggle="trackCreateSection(this,'details')">
+      <summary>1. Conference details</summary><div class="create-section-body">
       <div class="card-sub">This is the basic information attendees will see.</div>
 
       <div class="field-group">
@@ -508,10 +515,10 @@ function render() {
           `).join("")}
         </div>
       </div>
-    </div>
+      </div></details>
 
-    <div class="card">
-      <h2>Access</h2>
+    <details class="card" ${openCreateSection==='access'?'open':''} ontoggle="trackCreateSection(this,'access')">
+      <summary>2. Access</summary><div class="create-section-body">
       <div class="card-sub">Participants and faculty log in with your conference's login code plus a personal number, e.g. "${form.slug ? form.slug.toUpperCase() : "HNUS"}42". You use a PIN to edit this conference later.</div>
 
       <div class="field-row">
@@ -534,10 +541,10 @@ function render() {
           ${form.adminPin && !pinValid ? "Must be 4–6 digits." : "You'll need this to edit the conference or reset participant tests later."}
         </div>
       </div>
-    </div>
+      </div></details>
 
-    <div class="card">
-      <h2>Modules</h2>
+    <details class="card" ${openCreateSection==='modules'?'open':''} ontoggle="trackCreateSection(this,'modules')">
+      <summary>3. Modules</summary><div class="create-section-body">
       <div class="card-sub">Choose the sections participants will see. Schedule is always included.</div>
 
       <div class="module-row">
@@ -567,10 +574,10 @@ function render() {
       ${form.modules.industry ? renderModuleEditor('industry') : ''}
       ${form.modules.quiz ? renderModuleEditor('quiz') : ''}
       ${form.modules.contact ? renderModuleEditor('contact') : ''}
-    </div>
+      </div></details>
 
-    <div class="card">
-      <h2>Schedule</h2>
+    <details class="card" ${openCreateSection==='schedule'?'open':''} ontoggle="trackCreateSection(this,'schedule')">
+      <summary>4. Schedule</summary><div class="create-section-body">
       <div class="card-sub">Add the sessions attendees will see. You can edit this anytime after creating the conference.</div>
 
       ${sessions.map((s, i) => `
@@ -602,7 +609,7 @@ function render() {
       `).join("")}
 
       <button class="add-session-btn" onclick="addSession()">+ Add session</button>
-    </div>
+      </div></details>
 
     <button class="submit-btn ${ready ? "ready" : ""}" ${ready ? "" : "disabled"} onclick="submitConference()">
       ${creating ? "Creating..." : "Create conference"}
@@ -620,6 +627,7 @@ function onName(val) {
   form.name = val;
   render();
 }
+function trackCreateSection(el,key){if(el.open)openCreateSection=key;else if(openCreateSection===key)openCreateSection='';}
 
 function onSlug(val) {
   form.slug = cleanCode(val);
