@@ -8,7 +8,7 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --pf-theme:       #3E4C9C; /* overridden per-conference via JS */
+    --pf-theme:       #07558F; /* overridden per-conference via JS */
     --pf-theme-light: #EEF0FA; /* overridden per-conference via JS */
     --pf-ink:         #1E2233;
     --pf-white:       #FFFFFF;
@@ -34,7 +34,7 @@
 
   .shell {
     width: 100%;
-    max-width: 480px;
+    max-width: 960px;
     background: var(--pf-white);
     border-radius: 14px;
     overflow: hidden;
@@ -53,16 +53,17 @@
 
   /* ── Header ──────────────────────────────────────────────────────── */
   .conf-header {
-    background: var(--pf-theme);
-    color: #fff;
-    padding: 20px;
+    background: #fff;
+    color: var(--pf-theme);
+    padding: 28px 32px;
+    border-bottom:4px solid var(--pf-theme);
   }
   .conf-header .eyebrow {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
     opacity: .85; margin-bottom: 6px; display:flex; align-items:center; justify-content:space-between;
   }
   .conf-header h1 { font-size: 19px; margin-bottom: 4px; }
-  .conf-header .dates { font-size: 12.5px; opacity: .92; }
+  .conf-header .dates { font-size: 14px; color:var(--pf-muted); }
   .mode-badge {
     background: rgba(255,255,255,0.2);
     padding: 3px 8px;
@@ -112,14 +113,17 @@
     font-weight: bold; cursor: pointer;
   }
 
-  .tab-bar { display: flex; border-bottom: 2px solid var(--pf-border); }
+  .tab-bar { display: flex; border-bottom: 2px solid var(--pf-border); overflow-x:auto; background:#fff; }
   .tab-btn {
-    flex: 1; text-align: center; padding: 11px 6px; font-size: 12.5px; font-weight: bold;
+    flex: 1 0 auto; min-width:112px; text-align: center; padding: 15px 12px; font-size: 14px; font-weight: bold;
     color: var(--pf-muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;
   }
-  .tab-btn.active { color: var(--pf-theme); border-bottom-color: var(--pf-theme); }
+  .tab-btn.active { color: var(--pf-theme); border-bottom-color: var(--pf-theme); background:var(--pf-theme-light); }
 
-  .panel-scroll { padding: 16px 20px 28px; max-height: 640px; overflow-y: auto; }
+  .panel-scroll { padding: 28px 32px 40px; max-height: 760px; overflow-y: auto; }
+  .module-placeholder { border:2px solid #cfdae3; border-radius:14px; background:#f7f8f9; padding:28px; }
+  .module-placeholder h2 { color:var(--pf-theme); margin-bottom:8px; }
+  .module-placeholder p { color:var(--pf-muted); line-height:1.55; }
 
   .day-group { margin-bottom: 16px; }
   .day-label {
@@ -128,7 +132,7 @@
   }
   .session-card {
     border: 2px solid var(--pf-border); border-top: none;
-    padding: 10px 12px; font-size: 13px;
+    padding: 14px 18px; font-size: 14px;
   }
   .day-group .session-card:last-child { border-radius: 0 0 8px 8px; }
   .session-card .time { font-size: 11px; color: var(--pf-theme); font-weight: bold; }
@@ -303,7 +307,7 @@ const DEMO_CONFERENCE = {
   meta: {
     name: "Demo Conference 2027",
     slug: "demo",
-    themeColor: "#3E4C9C",
+    themeColor: "#07558F",
     startDate: "2027-06-10",
     endDate: "2027-06-11",
     contactEmail: "demo@example.com",
@@ -490,6 +494,8 @@ function render() {
 
   if (mode === "participant") {
     const hasQuiz = meta.modules && meta.modules.quiz;
+    const tabs = getParticipantTabs(meta);
+    if (!tabs.some(t => t.key === participantTab)) participantTab = "schedule";
     setHtmlPreservingFocus(shell, `
       <div class="conf-header">
         <div class="eyebrow"><span>Programme</span><span class="mode-badge">Participant</span></div>
@@ -500,14 +506,11 @@ function render() {
         <div class="who">Logged in as #${escHtml(loginNr)}</div>
         <a href="login.html" style="text-decoration:none;"><button>Log out</button></a>
       </div>
-      ${hasQuiz ? `
-        <div class="tab-bar">
-          <div class="tab-btn ${participantTab === 'schedule' ? 'active' : ''}" onclick="switchParticipantTab('schedule')">Programme</div>
-          <div class="tab-btn ${participantTab === 'quiz' ? 'active' : ''}" onclick="switchParticipantTab('quiz')">Test</div>
-        </div>
-      ` : ""}
+      <div class="tab-bar">
+        ${tabs.map(t => `<div class="tab-btn ${participantTab === t.key ? 'active' : ''}" onclick="switchParticipantTab('${t.key}')">${t.icon} ${t.label}</div>`).join('')}
+      </div>
       <div class="panel-scroll" id="participantScroll">
-        ${participantTab === "quiz" && hasQuiz ? renderQuizTab() : renderScheduleReadOnly(confData.schedule)}
+        ${renderParticipantModule(participantTab)}
       </div>
     `);
     return;
@@ -556,6 +559,31 @@ function resetQuizParticipantState() {
   quizStatus = null;
   quizSubmitting = false;
   quizResult = null;
+}
+
+function getParticipantTabs(meta) {
+  const modules = meta.modules || {};
+  return [
+    { key: "schedule", icon: "◷", label: "Schedule", enabled: true },
+    { key: "handsOn", icon: "▣", label: "Hands on", enabled: !!modules.handsOn },
+    { key: "map", icon: "◇", label: "Map", enabled: !!modules.map },
+    { key: "industry", icon: "▱", label: "Industry", enabled: !!modules.industry },
+    { key: "quiz", icon: "☑", label: "Test", enabled: !!modules.quiz },
+    { key: "contact", icon: "⌕", label: "Contact", enabled: !!modules.contact },
+  ].filter(t => t.enabled);
+}
+
+function renderParticipantModule(tab) {
+  if (tab === "schedule") return renderScheduleReadOnly(confData.schedule);
+  if (tab === "quiz") return renderQuizTab();
+  const content = {
+    handsOn: ["Hands on", "Station rotations and practical course information will appear here once the organizer has added them."],
+    map: ["Map", "Venue map and directions will appear here once the organizer has added them."],
+    industry: ["Industry", "Exhibition stands and industry partners will appear here once the organizer has added them."],
+    contact: ["Contact", confData.meta.contactEmail ? `Course coordinator: ${confData.meta.contactEmail}` : "Organizer contact details will appear here once they have been added."],
+  };
+  const item = content[tab] || ["Information", "No content has been added yet."];
+  return `<div class="module-placeholder"><h2>${escHtml(item[0])}</h2><p>${escHtml(item[1])}</p></div>`;
 }
 
 function onPinInput(v) { pinInput = v.replace(/\D/g, "").slice(0, 6); }
@@ -711,7 +739,7 @@ function loadQuiz() {
     fetch(`${PLATFORM_WORKER_URL}/conf/${encodeURIComponent(confSlug)}/quiz/status?nr=${encodeURIComponent(loginNr)}`).then(r => r.json()),
   ])
     .then(([quizData, statusData]) => {
-      quizQuestions = quizData.questions || [];
+      quizQuestions = (quizData.questions || []).map((q, i) => ({ ...q, id: q.id || `Q${i + 1}` }));
       quizStatus = statusData;
       quizLoading = false;
       rerenderParticipantScroll();
@@ -760,15 +788,16 @@ function renderQuizTab() {
   const answeredCount = Object.keys(quizAnswers).length;
   const allAnswered = answeredCount === quizQuestions.length;
 
-  const questionsHtml = quizQuestions.map(q => {
-    const isAnswered = quizAnswers[q.id] !== undefined;
+  const questionsHtml = quizQuestions.map((q, questionIndex) => {
+    const questionId = q.id || `Q${questionIndex + 1}`;
+    const isAnswered = quizAnswers[questionId] !== undefined;
     return `
       <div class="quiz-question-card ${isAnswered ? 'answered' : ''}">
-        <div class="qnum">${escHtml(q.id)}</div>
+        <div class="qnum">${escHtml(questionId)}</div>
         <div class="qtext">${escHtml(q.text)}</div>
         ${q.options.map((opt, i) => `
           <label class="quiz-option-row ${quizAnswers[q.id] === i ? 'checked' : ''}">
-            <input type="radio" name="${q.id}" ${quizAnswers[q.id] === i ? "checked" : ""} onchange="onQuizAnswer('${q.id}',${i})">
+            <input type="radio" name="answer-${questionId}" ${quizAnswers[questionId] === i ? "checked" : ""} onchange="onQuizAnswer('${questionId}',${i})">
             <span>${escHtml(opt)}</span>
           </label>
         `).join("")}

@@ -9,8 +9,8 @@
 
   :root {
     --pf-ink:        #1E2233;
-    --pf-indigo:      #3E4C9C;
-    --pf-indigo-light:#EEF0FA;
+    --pf-indigo:      #07558F;
+    --pf-indigo-light:#E5F0F8;
     --pf-white:       #FFFFFF;
     --pf-gray:        #F5F6FA;
     --pf-border:      #DADFF0;
@@ -232,8 +232,11 @@
 
   .module-row {
     display: flex; align-items: flex-start; gap: 12px;
-    padding: 12px; border: 2px solid var(--pf-border); border-radius: 10px; margin-bottom: 10px;
+    padding: 14px; border: 2px solid #cfdae3; border-radius: 12px; margin-bottom: 10px;
+    background:#f7f8f9;
   }
+  .module-row:has(input:checked) { border-color:var(--pf-indigo); background:var(--pf-indigo-light); }
+  .module-icon { width:28px; color:var(--pf-indigo); font-size:20px; text-align:center; flex-shrink:0; }
   .module-row:last-child { margin-bottom: 0; }
   .module-row.disabled { opacity: .55; }
   .module-toggle { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; width: 100%; }
@@ -352,7 +355,7 @@ function setHtmlPreservingFocus(el, html) {
 }
 
 const THEME_COLORS = [
-  { name: "Indigo", hex: "#3E4C9C" },
+  { name: "HNUS blue", hex: "#07558F" },
   { name: "Blue",   hex: "#004B87" },
   { name: "Teal",   hex: "#0F7A6E" },
   { name: "Green",  hex: "#1E7A3D" },
@@ -372,7 +375,7 @@ let form = {
   adminPin: "",
   participantCount: 100,
   facultyCount: 20,
-  modules: { quiz: false },
+  modules: { handsOn: false, map: false, industry: false, quiz: false, contact: false },
 };
 
 let sessions = [
@@ -518,27 +521,29 @@ function render() {
 
     <div class="card">
       <h2>Modules</h2>
-      <div class="card-sub">Optional extras you can turn on for this conference. You can change this later too.</div>
+      <div class="card-sub">Choose the sections participants will see. Schedule is always included.</div>
 
       <div class="module-row">
         <label class="module-toggle">
-          <input type="checkbox" ${form.modules.quiz ? "checked" : ""} onchange="onModuleToggle('quiz', this.checked)">
-          <div>
-            <div class="module-name">Test / Quiz</div>
-            <div class="module-desc">Attendees answer multiple-choice questions; graded automatically, with a pass/fail shown right after they submit. You add the questions after creating the conference.</div>
-          </div>
+          <input type="checkbox" checked disabled>
+          <div class="module-icon">◷</div><div><div class="module-name">Schedule</div><div class="module-desc">The programme arranged by date and time.</div></div>
         </label>
       </div>
 
-      <div class="module-row disabled">
-        <label class="module-toggle">
-          <input type="checkbox" disabled>
-          <div>
-            <div class="module-name">Station rotation <span class="soon-badge">Coming soon</span></div>
-            <div class="module-desc">For hands-on courses with physical stations attendees rotate between.</div>
-          </div>
-        </label>
-      </div>
+      ${[
+        ['handsOn','▣','Hands on','Rotations, stations, rooms and practical course information.'],
+        ['map','◇','Map','Venue map and directions for participants.'],
+        ['industry','▱','Industry','Exhibitors, stands and industry partners.'],
+        ['quiz','☑','Test','Multiple-choice questions with automatic grading.'],
+        ['contact','⌕','Contact','Course coordinator and technical support details.']
+      ].map(([key,icon,name,desc]) => `
+        <div class="module-row">
+          <label class="module-toggle">
+            <input type="checkbox" ${form.modules[key] ? "checked" : ""} onchange="onModuleToggle('${key}', this.checked)">
+            <div class="module-icon">${icon}</div><div><div class="module-name">${name}</div><div class="module-desc">${desc}</div></div>
+          </label>
+        </div>
+      `).join('')}
     </div>
 
     <div class="card">
