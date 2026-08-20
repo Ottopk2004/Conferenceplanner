@@ -274,6 +274,24 @@
     line-height: 1.5;
   }
 </style>
+<style>
+@media (max-width: 600px) {
+  body { padding:0 0 48px; background:#fff; }
+  .shell { max-width:none; }
+  .top-brand { padding:16px; margin:0; border-bottom:2px solid var(--pf-border); }
+  #wizard { padding:12px; }
+  .card { border-radius:12px; margin-bottom:12px; box-shadow:none; border:1px solid var(--pf-border); }
+  details.card > summary { padding:16px; font-size:16px; }
+  .create-section-body { padding:0 14px 16px; }
+  .field-row { flex-direction:column; gap:0; }
+  .field-group input, .field-group textarea, .session-row input { min-height:46px; font-size:16px; }
+  .module-row { padding:13px 11px; }
+  .module-editor-body { padding:12px; }
+  .session-row { padding:11px; }
+  .submit-btn { min-height:52px; font-size:16px; }
+  .color-swatch { width:40px; height:40px; }
+}
+</style>
 </head>
 <body>
 

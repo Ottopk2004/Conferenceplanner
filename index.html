@@ -239,6 +239,30 @@
   .quiz-opt-edit-row input[type="radio"] { accent-color: var(--pf-theme); flex-shrink: 0; }
   .quiz-opt-edit-row input[type="text"] { flex: 1; padding: 7px 9px; font-size: 12.5px; }
 </style>
+<style>
+@media (max-width: 600px) {
+  body { padding:0; background:#fff; }
+  .shell { max-width:none; min-height:100vh; border-radius:0; box-shadow:none; }
+  .conf-header { padding:20px 16px; }
+  .conf-header h1 { font-size:21px; }
+  .toolbar { padding:11px 16px; }
+  .tab-bar { scrollbar-width:thin; -webkit-overflow-scrolling:touch; }
+  .tab-btn { min-width:104px; padding:14px 10px; font-size:13px; }
+  .panel-scroll { padding:18px 14px 32px; max-height:none; }
+  .field-row { flex-direction:column; gap:0; }
+  .field-group input, .field-group textarea { min-height:46px; font-size:16px; }
+  .next-up-card { padding:22px 18px; border-radius:15px; }
+  .next-up-card h2 { font-size:23px; }
+  .next-up-meta { gap:16px; }
+  .next-up-meta > div { min-width:72px; flex:1; }
+  .info-card { padding:15px; border-radius:12px; }
+  .info-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .content-image { max-height:420px; }
+  .session-card { padding:13px 12px; }
+  .login-body { padding:24px 16px; }
+  .save-btn, .add-btn, .login-btn, .pin-btn { min-height:48px; }
+}
+</style>
 </head>
 <body>
 
