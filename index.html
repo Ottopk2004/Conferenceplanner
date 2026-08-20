@@ -525,6 +525,8 @@ function render() {
   }
 
   if (mode === "faculty") {
+    const tabs = getParticipantTabs(meta);
+    if (!tabs.some(t => t.key === participantTab)) participantTab = "schedule";
     setHtmlPreservingFocus(shell, `
       <div class="conf-header">
         <div class="eyebrow"><span>Programme</span><span class="mode-badge">Faculty</span></div>
@@ -535,8 +537,9 @@ function render() {
         <div class="who">Logged in as #${escHtml(loginNr)}</div>
         <a href="login.html" style="text-decoration:none;"><button>Log out</button></a>
       </div>
+      <div class="tab-bar">${tabs.map(t => `<div class="tab-btn ${participantTab === t.key ? 'active' : ''}" onclick="switchParticipantTab('${t.key}')">${t.icon} ${t.label}</div>`).join('')}</div>
       <div class="panel-scroll" id="participantScroll">
-        ${renderScheduleReadOnly(confData.schedule)}
+        ${renderParticipantModule(participantTab)}
       </div>
     `);
     return;
@@ -589,8 +592,7 @@ function renderParticipantModule(tab) {
   const top = `<h2 style="color:var(--pf-theme)">${escHtml(heading)}</h2>${c.intro ? `<p class="content-intro">${escHtml(c.intro)}</p>` : ''}${c.image ? `<img class="content-image" src="${c.image}" alt="${escHtml(heading)}">` : ''}`;
   if (tab === 'map') return `${top}${c.address ? `<div class="info-card"><h3>Venue</h3><p>${escHtml(c.address)}</p></div>` : emptyModule()}`;
   if (tab === 'handsOn') {
-    const cards = parseRows(c.items).map((r,i) => `<div class="info-card"><h3>${escHtml(r[0] || `Station ${i+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${escHtml(r[1] || 'TBA')}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(r[2] || 'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(r[3] || 'TBA')}</strong></div></div></div>`).join('');
-    return top + (cards || emptyModule());
+    return top + renderHandsOnAssignment(c);
   }
   if (tab === 'industry') {
     const cards = parseRows(c.items).map((r,i) => `<div class="info-card"><h3>${escHtml(r[0] || `Industry ${i+1}`)}</h3>${r[1] ? `<p>${escHtml(r[1])}</p>` : ''}${r[2] ? `<p style="margin-top:8px"><a href="${safeUrl(r[2])}" target="_blank" rel="noopener">Visit website</a></p>` : ''}</div>`).join('');
@@ -607,6 +609,22 @@ function parseRows(text) { return String(text || '').split(/\r?\n/).map(x => x.s
 function emptyModule() { return `<div class="module-placeholder"><p>No content has been added yet.</p></div>`; }
 function safeUrl(url) { const s=String(url||''); return /^https?:\/\//i.test(s) ? escHtml(s) : '#'; }
 function contactCard(title,name,phone,email) { if(!name&&!phone&&!email)return ''; return `<div class="info-card"><h3>${escHtml(title)}</h3>${name?`<p><strong>${escHtml(name)}</strong></p>`:''}${phone?`<p>☎ ${escHtml(phone)}</p>`:''}${email?`<p>✉ <a href="mailto:${escHtml(email)}">${escHtml(email)}</a></p>`:''}</div>`; }
+function balancedBucket(position,total,buckets){const base=Math.floor(total/buckets),extra=total%buckets,small=buckets-extra;let start=1;for(let b=0;b<buckets;b++){const size=base+(b>=small?1:0),end=start+size-1;if(position>=start&&position<=end)return b;start=end+1;}return Math.max(0,buckets-1);}
+function bucketMembers(bucket,total,buckets,offset=0){const out=[];for(let p=1;p<=total;p++)if(balancedBucket(p,total,buckets)===bucket)out.push(p+offset);return out;}
+function minutesOf(t){const m=String(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;}
+function timeOf(m){return `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;}
+function renderHandsOnAssignment(c){
+  const stations=(c.stations||[]).slice(0,Number(c.stationCount)||0); if(!stations.length)return emptyModule();
+  const n=stations.length,start=minutesOf(c.startTime),end=minutesOf(c.endTime),step=Number(c.rotationMinutes)||30;
+  if(mode==='faculty'){
+    const facultyPosition=Number(loginNr)-999, total=Number(confData.meta.facultyCount)||0, stationIndex=balancedBucket(facultyPosition,total,n), s=stations[stationIndex]||{};
+    const colleagues=bucketMembers(stationIndex,total,n,999);
+    return `<div class="info-card"><h3>Your station: ${escHtml(s.name||`Station ${stationIndex+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Date</span><strong>${escHtml(c.date||'TBA')}</strong></div><div class="info-cell"><span>Time</span><strong>${escHtml(c.startTime||'')}–${escHtml(c.endTime||'')}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(s.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(s.stand||'TBA')}</strong></div></div><p style="margin-top:14px"><strong>Faculty at this station:</strong> ${colleagues.map(x=>'#'+x).join(', ')}</p></div>`;
+  }
+  const total=Number(confData.meta.participantCount)||0, group=balancedBucket(Number(loginNr),total,n), members=bucketMembers(group,total,n);
+  let cards=''; for(let r=0;r<n;r++){const from=start+r*step,to=Math.min(from+step,end),station=stations[(group+r)%n]||{};if(from>=end)break;cards+=`<div class="info-card"><h3>${escHtml(station.name||`Station ${(group+r)%n+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${timeOf(from)}–${timeOf(to)}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(station.room||'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(station.stand||'TBA')}</strong></div></div></div>`;}
+  return `<div class="info-card" style="background:var(--pf-theme-light)"><h3>Group ${group+1} of ${n}</h3><p>Participants: ${members.map(x=>'#'+x).join(', ')}</p></div>${cards}`;
+}
 
 function onPinInput(v) { pinInput = v.replace(/\D/g, "").slice(0, 6); }
 
@@ -1033,16 +1051,18 @@ function onToggleModule(key, checked) {
 
 function ensureModuleContentDefaults() {
   const defaults = {
-    handsOn:{title:'Hands on',intro:'',items:''}, map:{title:'Venue map',intro:'',address:'',image:''},
+    handsOn:{title:'Hands on',intro:'',date:'',startTime:'09:00',endTime:'11:30',rotationMinutes:30,stationCount:5,stations:Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:'',stand:`Stand ${i+1}`}))}, map:{title:'Venue map',intro:'',address:'',image:''},
     industry:{title:'Industry',intro:'',items:'',image:''}, quiz:{title:'Final test',intro:'Answer all questions. The test can only be taken once.'}, contact:{title:'Contact',intro:'',coordinatorName:'',coordinatorPhone:'',coordinatorEmail:'',supportName:'',supportPhone:'',supportEmail:'',image:''}
   };
   for (const key of Object.keys(defaults)) editModuleContent[key] = Object.assign({}, defaults[key], editModuleContent[key] || {});
 }
 function onEditModuleContent(module,key,value) { editModuleContent[module][key] = value; }
+function onEditHandsOnCount(value){const c=editModuleContent.handsOn,count=Math.max(1,Math.min(30,parseInt(value)||1));c.stationCount=count;c.stations=c.stations||[];while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});c.stations=c.stations.slice(0,count);rerenderOrganizerScroll();}
+function onEditHandsOnStation(i,key,value){editModuleContent.handsOn.stations[i][key]=value;}
 function renderOrganizerModuleContent(module) {
   const c=editModuleContent[module];
   let specific='';
-  if(module==='handsOn') specific=`<div class="field-group"><label>Stations — one per line: Name | Time | Room | Stand</label><textarea oninput="onEditModuleContent('handsOn','items',this.value)">${escHtml(c.items)}</textarea></div>`;
+  if(module==='handsOn') specific=`<div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(c.date)}" oninput="onEditModuleContent('handsOn','date',this.value)"></div><div class="field-group"><label>Stations</label><input type="number" min="1" max="30" value="${c.stationCount}" onchange="onEditHandsOnCount(this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(c.startTime)}" oninput="onEditModuleContent('handsOn','startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(c.endTime)}" oninput="onEditModuleContent('handsOn','endTime',this.value)"></div><div class="field-group"><label>Minutes/rotation</label><input type="number" min="5" step="5" value="${c.rotationMinutes}" oninput="onEditModuleContent('handsOn','rotationMinutes',parseInt(this.value)||30)"></div></div>${(c.stations||[]).map((s,i)=>`<div class="session-edit-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(s.name)}" oninput="onEditHandsOnStation(${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onEditHandsOnStation(${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onEditHandsOnStation(${i},'stand',this.value)"></div></div></div>`).join('')}`;
   if(module==='map') specific=`<div class="field-group"><label>Address</label><input value="${escHtml(c.address)}" oninput="onEditModuleContent('map','address',this.value)"></div>${renderOrganizerImage('map')}`;
   if(module==='industry') specific=`<div class="field-group"><label>Partners — one per line: Name | Description | Website</label><textarea oninput="onEditModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderOrganizerImage('industry')}`;
   if(module==='contact') specific=`<div class="field-group"><label>Coordinator name</label><input value="${escHtml(c.coordinatorName)}" oninput="onEditModuleContent('contact','coordinatorName',this.value)"></div><div class="field-row"><div class="field-group"><label>Phone</label><input value="${escHtml(c.coordinatorPhone)}" oninput="onEditModuleContent('contact','coordinatorPhone',this.value)"></div><div class="field-group"><label>Email</label><input value="${escHtml(c.coordinatorEmail)}" oninput="onEditModuleContent('contact','coordinatorEmail',this.value)"></div></div><div class="field-group"><label>Technical support name</label><input value="${escHtml(c.supportName)}" oninput="onEditModuleContent('contact','supportName',this.value)"></div><div class="field-row"><div class="field-group"><label>Support phone</label><input value="${escHtml(c.supportPhone)}" oninput="onEditModuleContent('contact','supportPhone',this.value)"></div><div class="field-group"><label>Support email</label><input value="${escHtml(c.supportEmail)}" oninput="onEditModuleContent('contact','supportEmail',this.value)"></div></div>${renderOrganizerImage('contact')}`;
@@ -1177,6 +1197,7 @@ function rerenderOrganizerScroll() {
 }
 
 function saveOrganizerChanges() {
+  if(editMeta.modules && editMeta.modules.handsOn && !validHandsOnConfig(editModuleContent.handsOn)){alert('Hands on is not valid. Add a date and make sure the total time fits every rotation (stations × minutes per rotation).');return;}
   saveStatus = "Saving…"; saveStatusIsError = false;
   rerenderOrganizerScroll();
 
@@ -1224,6 +1245,7 @@ function saveOrganizerChanges() {
       rerenderOrganizerScroll();
     });
 }
+function validHandsOnConfig(c){return !!c&&!!c.date&&minutesOf(c.endTime)>minutesOf(c.startTime)&&(minutesOf(c.endTime)-minutesOf(c.startTime))>=Number(c.stationCount||0)*Number(c.rotationMinutes||0);}
 
 function escHtml(str) {
   return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");

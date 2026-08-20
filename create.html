@@ -383,7 +383,7 @@ let form = {
   facultyCount: 20,
   modules: { handsOn: false, map: false, industry: false, quiz: false, contact: false },
   moduleContent: {
-    handsOn: { title: "Hands on", intro: "", items: "" },
+    handsOn: { title: "Hands on", intro: "", date: "", startTime: "09:00", endTime: "11:30", rotationMinutes: 30, stationCount: 5, stations: Array.from({length:5},(_,i)=>({name:`Station ${i+1}`,room:"",stand:`Stand ${i+1}`})) },
     map: { title: "Venue map", intro: "", address: "", image: "" },
     industry: { title: "Industry", intro: "", items: "", image: "" },
     quiz: { title: "Final test", intro: "Answer all questions. The test can only be taken once." },
@@ -456,7 +456,8 @@ function render() {
   const nameValid = form.name.trim().length >= 3;
   const datesValid = form.startDate && form.endDate && form.startDate <= form.endDate;
   const sessionsValid = sessions.some(s => s.title.trim().length > 0);
-  const ready = slugValid && pinValid && nameValid && datesValid && sessionsValid && !creating;
+  const handsOnValid = !form.modules.handsOn || validateHandsOn(form.moduleContent.handsOn);
+  const ready = slugValid && pinValid && nameValid && datesValid && sessionsValid && handsOnValid && !creating;
 
   setHtmlPreservingFocus(el, `
     <div class="card">
@@ -639,7 +640,16 @@ function onModuleToggle(key, checked) {
 
 function onModuleContent(module, key, value) {
   form.moduleContent[module][key] = value;
+  if(module==='handsOn' && ['date','startTime','endTime','rotationMinutes'].includes(key)) render();
 }
+function onHandsOnStationCount(value) {
+  const c=form.moduleContent.handsOn, count=Math.max(1,Math.min(30,parseInt(value)||1));
+  c.stationCount=count; c.stations=c.stations||[];
+  while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});
+  c.stations=c.stations.slice(0,count); render();
+}
+function onHandsOnStation(i,key,value){form.moduleContent.handsOn.stations[i][key]=value;}
+function validateHandsOn(c){const toMin=t=>{const m=String(t||'').match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;};return !!c.date&&toMin(c.endTime)>toMin(c.startTime)&&(toMin(c.endTime)-toMin(c.startTime))>=Number(c.stationCount||0)*Number(c.rotationMinutes||0);}
 
 function renderModuleEditor(module) {
   const c = form.moduleContent[module];
@@ -647,7 +657,11 @@ function renderModuleEditor(module) {
     <div class="field-group"><label>Tab heading</label><input type="text" value="${escHtml(c.title)}" oninput="onModuleContent('${module}','title',this.value)"></div>
     <div class="field-group"><label>Introduction</label><textarea placeholder="Information shown at the top of this section" oninput="onModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>`;
   let fields = '';
-  if (module === 'handsOn') fields = `<div class="field-group"><label>Stations and rotations</label><textarea placeholder="One card per line: Yellow station | 10:30–11:00 | Room A1 | Stand 1" oninput="onModuleContent('handsOn','items',this.value)">${escHtml(c.items)}</textarea><div class="field-hint">Use | between station, time, room and stand.</div></div>`;
+  if (module === 'handsOn') fields = `
+    <div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(c.date)}" oninput="onModuleContent('handsOn','date',this.value)"></div><div class="field-group"><label>Number of stations</label><input type="number" min="1" max="30" value="${c.stationCount}" onchange="onHandsOnStationCount(this.value)"></div></div>
+    <div class="field-row"><div class="field-group"><label>Start time</label><input type="time" value="${escHtml(c.startTime)}" oninput="onModuleContent('handsOn','startTime',this.value)"></div><div class="field-group"><label>End time</label><input type="time" value="${escHtml(c.endTime)}" oninput="onModuleContent('handsOn','endTime',this.value)"></div><div class="field-group"><label>Minutes per rotation</label><input type="number" min="5" max="240" step="5" value="${c.rotationMinutes}" oninput="onModuleContent('handsOn','rotationMinutes',parseInt(this.value)||30)"></div></div>
+    <div class="field-hint ${validateHandsOn(c)?'':'error'}" style="margin-bottom:12px">${validateHandsOn(c)?'One participant group is created per station. Every group rotates through every station.':'The interval from start to end must fit every station: stations × minutes per rotation.'}</div>
+    ${(c.stations||[]).map((s,i)=>`<div class="session-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input type="text" value="${escHtml(s.name)}" oninput="onHandsOnStation(${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input type="text" value="${escHtml(s.room)}" oninput="onHandsOnStation(${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input type="text" value="${escHtml(s.stand)}" oninput="onHandsOnStation(${i},'stand',this.value)"></div></div></div>`).join('')}`;
   if (module === 'map') fields = `<div class="field-group"><label>Venue address</label><input type="text" value="${escHtml(c.address)}" oninput="onModuleContent('map','address',this.value)"></div>${renderImageField('map')}`;
   if (module === 'industry') fields = `<div class="field-group"><label>Industry partners</label><textarea placeholder="One card per line: Company name | Description | Website" oninput="onModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderImageField('industry')}`;
   if (module === 'contact') fields = `
