@@ -230,7 +230,7 @@
 // platform-setup-guide.md). Left empty for now — the app falls back to a
 // small built-in demo conference so the UI can be built and tested before
 // the backend exists.
-const PLATFORM_WORKER_URL = "";
+const PLATFORM_WORKER_URL = "https://cm-worker.conferenceplanner.workers.dev";
 
 // Replaces an element's HTML while preserving focus and cursor position in
 // whichever input the user is currently typing in. Without this, every
@@ -875,7 +875,7 @@ function renderOrganizerEditor() {
           </div>
           <div>
             <span class="mini-label">Time</span>
-            <input type="time" value="${escHtml(s.time)}" oninput="onEditSession(${i},'time',this.value)">
+            <input type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" value="${escHtml(s.time)}" oninput="onEditTimeInput(this,${i})">
           </div>
         </div>
         <div style="margin-bottom:8px;">
@@ -1081,6 +1081,13 @@ function doQuizReset() {
 
 function onEditMeta(key, val) { editMeta[key] = val; }
 function onEditSession(i, key, val) { editSessions[i][key] = val; }
+function onEditTimeInput(input, i) {
+  const digits = input.value.replace(/\D/g, "").slice(0, 4);
+  let value = digits.slice(0, 2);
+  if (digits.length >= 2) value += ":" + digits.slice(2);
+  input.value = value;
+  editSessions[i].time = value;
+}
 function addEditSession() {
   editSessions.push({ date: "", time: "", title: "", speaker: "" });
   rerenderOrganizerScroll();

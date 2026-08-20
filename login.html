@@ -154,6 +154,8 @@
 </div>
 
 <script>
+const PLATFORM_WORKER_URL = "https://cm-worker.conferenceplanner.workers.dev";
+
 function onCodeInput(v) {
   document.getElementById("codeError").textContent = "";
 }
@@ -165,12 +167,31 @@ function parseCode(raw) {
   return { slug: match[1], nr: match[2] };
 }
 
-function doLogin() {
+async function conferenceExists(slug) {
+  try {
+    const res = await fetch(`${PLATFORM_WORKER_URL}/conf/${encodeURIComponent(slug)}`);
+    return res.ok;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function doLogin() {
   const raw = document.getElementById("codeInput").value;
   const parsed = parseCode(raw);
   const errEl = document.getElementById("codeError");
   if (!parsed) {
     errEl.textContent = "Enter a code followed by your number, e.g. HNUS42.";
+    return;
+  }
+  errEl.textContent = "Checking conference…";
+  const exists = await conferenceExists(parsed.slug);
+  if (exists === false) {
+    errEl.textContent = "This conference does not exist. Check the code and try again.";
+    return;
+  }
+  if (exists === null) {
+    errEl.textContent = "Couldn't contact the conference service. Please try again.";
     return;
   }
   errEl.textContent = "";
@@ -181,11 +202,21 @@ function toggleOrganizerChoice() {
   document.getElementById("organizerChoice").classList.toggle("open");
 }
 
-function doManage() {
+async function doManage() {
   const raw = document.getElementById("manageCodeInput").value.trim().toLowerCase();
   const errEl = document.getElementById("manageError");
   if (!/^[a-z]{2,12}$/.test(raw)) {
     errEl.textContent = "Enter just the conference code, e.g. HNUS (letters only).";
+    return;
+  }
+  errEl.textContent = "Checking conference…";
+  const exists = await conferenceExists(raw);
+  if (exists === false) {
+    errEl.textContent = "This conference does not exist. Check the code and try again.";
+    return;
+  }
+  if (exists === null) {
+    errEl.textContent = "Couldn't contact the conference service. Please try again.";
     return;
   }
   errEl.textContent = "";

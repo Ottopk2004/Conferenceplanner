@@ -276,7 +276,7 @@
 // Point this at your platform worker once it's deployed (see
 // platform-setup-guide.md). Left empty for now, so the form can be built
 // and tested end to end before the backend exists.
-const PLATFORM_WORKER_URL = "";
+const PLATFORM_WORKER_URL = "https://cm-worker.conferenceplanner.workers.dev";
 
 // Replaces an element's HTML while preserving focus and cursor position in
 // whichever input the user is currently typing in. Without this, every
@@ -426,6 +426,10 @@ function render() {
           <div class="link-label">Your admin PIN</div>
           <div class="link-value">${escHtml(form.adminPin)}</div>
         </div>
+
+        <a href="${escHtml(organizerLink)}" style="text-decoration:none;">
+          <button class="submit-btn ready" style="margin-top:20px;">Open and manage conference</button>
+        </a>
       </div>
     `);
     return;
@@ -551,7 +555,7 @@ function render() {
             </div>
             <div>
               <span class="mini-label">Time</span>
-              <input type="time" value="${escHtml(s.time)}" oninput="onSessionField(${i},'time',this.value)">
+              <input type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" value="${escHtml(s.time)}" oninput="onTimeInput(this,${i})">
             </div>
           </div>
           <div class="field-row">
@@ -625,6 +629,14 @@ function onSessionField(i, key, val) {
   // lost — only re-render when it could affect validity (title determines
   // whether the form is submittable).
   if (key === "title") { render(); return; }
+}
+
+function onTimeInput(input, i) {
+  const digits = input.value.replace(/\D/g, "").slice(0, 4);
+  let value = digits.slice(0, 2);
+  if (digits.length >= 2) value += ":" + digits.slice(2);
+  input.value = value;
+  sessions[i].time = value;
 }
 
 function submitConference() {
