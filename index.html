@@ -124,6 +124,13 @@
   .module-placeholder { border:2px solid #cfdae3; border-radius:14px; background:#f7f8f9; padding:28px; }
   .module-placeholder h2 { color:var(--pf-theme); margin-bottom:8px; }
   .module-placeholder p { color:var(--pf-muted); line-height:1.55; }
+  .content-intro { color:var(--pf-muted); margin:4px 0 20px; line-height:1.55; }
+  .content-image { width:100%; max-height:560px; object-fit:contain; border:2px solid #cfdae3; border-radius:14px; background:#f7f8f9; margin:10px 0 20px; }
+  .info-card { border:2px solid #cfdae3; border-radius:14px; background:#f7f8f9; padding:18px 20px; margin-bottom:14px; }
+  .info-card h3 { color:var(--pf-theme); margin-bottom:8px; }
+  .info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-top:12px; }
+  .info-cell span { display:block; font-size:10px; color:var(--pf-muted); text-transform:uppercase; font-weight:bold; }
+  .info-cell strong { display:block; margin-top:3px; }
 
   .day-group { margin-bottom: 16px; }
   .day-label {
@@ -347,6 +354,7 @@ let pinInput = "";
 let pinError = "";
 let editMeta = null;
 let editSessions = null;
+let editModuleContent = null;
 let saveStatus = "";
 let saveStatusIsError = false;
 
@@ -576,15 +584,29 @@ function getParticipantTabs(meta) {
 function renderParticipantModule(tab) {
   if (tab === "schedule") return renderScheduleReadOnly(confData.schedule);
   if (tab === "quiz") return renderQuizTab();
-  const content = {
-    handsOn: ["Hands on", "Station rotations and practical course information will appear here once the organizer has added them."],
-    map: ["Map", "Venue map and directions will appear here once the organizer has added them."],
-    industry: ["Industry", "Exhibition stands and industry partners will appear here once the organizer has added them."],
-    contact: ["Contact", confData.meta.contactEmail ? `Course coordinator: ${confData.meta.contactEmail}` : "Organizer contact details will appear here once they have been added."],
-  };
-  const item = content[tab] || ["Information", "No content has been added yet."];
-  return `<div class="module-placeholder"><h2>${escHtml(item[0])}</h2><p>${escHtml(item[1])}</p></div>`;
+  const c = (confData.moduleContent || {})[tab] || {};
+  const heading = c.title || ({ handsOn:'Hands on', map:'Map', industry:'Industry', contact:'Contact' }[tab] || 'Information');
+  const top = `<h2 style="color:var(--pf-theme)">${escHtml(heading)}</h2>${c.intro ? `<p class="content-intro">${escHtml(c.intro)}</p>` : ''}${c.image ? `<img class="content-image" src="${c.image}" alt="${escHtml(heading)}">` : ''}`;
+  if (tab === 'map') return `${top}${c.address ? `<div class="info-card"><h3>Venue</h3><p>${escHtml(c.address)}</p></div>` : emptyModule()}`;
+  if (tab === 'handsOn') {
+    const cards = parseRows(c.items).map((r,i) => `<div class="info-card"><h3>${escHtml(r[0] || `Station ${i+1}`)}</h3><div class="info-grid"><div class="info-cell"><span>Time</span><strong>${escHtml(r[1] || 'TBA')}</strong></div><div class="info-cell"><span>Room</span><strong>${escHtml(r[2] || 'TBA')}</strong></div><div class="info-cell"><span>Stand</span><strong>${escHtml(r[3] || 'TBA')}</strong></div></div></div>`).join('');
+    return top + (cards || emptyModule());
+  }
+  if (tab === 'industry') {
+    const cards = parseRows(c.items).map((r,i) => `<div class="info-card"><h3>${escHtml(r[0] || `Industry ${i+1}`)}</h3>${r[1] ? `<p>${escHtml(r[1])}</p>` : ''}${r[2] ? `<p style="margin-top:8px"><a href="${safeUrl(r[2])}" target="_blank" rel="noopener">Visit website</a></p>` : ''}</div>`).join('');
+    return top + (cards || emptyModule());
+  }
+  if (tab === 'contact') {
+    const coordinator = contactCard('Course Coordinator', c.coordinatorName, c.coordinatorPhone, c.coordinatorEmail || confData.meta.contactEmail);
+    const support = contactCard('Technical Support', c.supportName, c.supportPhone, c.supportEmail);
+    return top + (coordinator + support || emptyModule());
+  }
+  return top + emptyModule();
 }
+function parseRows(text) { return String(text || '').split(/\r?\n/).map(x => x.split('|').map(y => y.trim())).filter(r => r.some(Boolean)); }
+function emptyModule() { return `<div class="module-placeholder"><p>No content has been added yet.</p></div>`; }
+function safeUrl(url) { const s=String(url||''); return /^https?:\/\//i.test(s) ? escHtml(s) : '#'; }
+function contactCard(title,name,phone,email) { if(!name&&!phone&&!email)return ''; return `<div class="info-card"><h3>${escHtml(title)}</h3>${name?`<p><strong>${escHtml(name)}</strong></p>`:''}${phone?`<p>☎ ${escHtml(phone)}</p>`:''}${email?`<p>✉ <a href="mailto:${escHtml(email)}">${escHtml(email)}</a></p>`:''}</div>`; }
 
 function onPinInput(v) { pinInput = v.replace(/\D/g, "").slice(0, 6); }
 
@@ -620,6 +642,8 @@ function enterOrganizerMode() {
   editMeta = Object.assign({}, confData.meta);
   if (!editMeta.modules) editMeta.modules = { quiz: false, stations: false };
   editSessions = confData.schedule.map(s => Object.assign({}, s));
+  editModuleContent = JSON.parse(JSON.stringify(confData.moduleContent || {}));
+  ensureModuleContentDefaults();
   if (editSessions.length === 0) editSessions.push({ date: "", time: "", title: "", speaker: "" });
   saveStatus = ""; saveStatusIsError = false;
 
@@ -785,6 +809,7 @@ function renderQuizTab() {
     return `<div class="empty-note">The test hasn't been set up yet — check back soon.</div>`;
   }
 
+  const quizCopy = (confData.moduleContent || {}).quiz || {};
   const answeredCount = Object.keys(quizAnswers).length;
   const allAnswered = answeredCount === quizQuestions.length;
 
@@ -806,7 +831,7 @@ function renderQuizTab() {
   }).join("");
 
   return `
-    <div class="quiz-intro">Answer all questions, then submit. Your answers are locked once you submit — the test can only be taken once.</div>
+    <div class="info-card" style="background:var(--pf-theme);color:#fff;border-color:var(--pf-theme);"><h2>${escHtml(quizCopy.title || 'Final test')}</h2><p style="margin-top:8px;line-height:1.5;">${escHtml(quizCopy.intro || 'Answer all questions, then submit. Your answers are locked once you submit — the test can only be taken once.')}</p></div>
     ${questionsHtml}
     <button class="quiz-submit-btn ${allAnswered ? 'ready' : ''}" id="quizSubmitBtn" ${allAnswered ? "" : "disabled"} onclick="submitQuiz()">
       ${quizSubmitting ? "Submitting..." : "Submit answers"}
@@ -922,14 +947,15 @@ function renderOrganizerEditor() {
     <button class="save-btn" onclick="saveOrganizerChanges()">Save changes</button>
     <div class="save-status ${saveStatusIsError ? 'error' : 'ok'}">${escHtml(saveStatus)}</div>
 
-    <div class="mini-label" style="margin:24px 0 8px;font-size:12px;">Modules</div>
-    <label class="module-toggle" style="border:2px solid var(--pf-border);border-radius:10px;padding:12px;display:flex;">
-      <input type="checkbox" ${hasQuiz ? "checked" : ""} onchange="onToggleQuizModule(this.checked)" style="width:18px;height:18px;margin-top:2px;accent-color:var(--pf-theme);flex-shrink:0;">
-      <div>
-        <div style="font-size:13.5px;font-weight:bold;">Test / Quiz</div>
-        <div style="font-size:11.5px;color:var(--pf-muted);">Enable the Test tab for participants.</div>
-      </div>
-    </label>
+    <div class="mini-label" style="margin:24px 0 8px;font-size:12px;">Modules and content</div>
+    ${[['handsOn','Hands on'],['map','Map'],['industry','Industry'],['quiz','Test'],['contact','Contact']].map(([key,label]) => `
+      <label class="module-toggle" style="border:2px solid var(--pf-border);border-radius:10px;padding:12px;display:flex;margin-bottom:8px;">
+        <input type="checkbox" ${editMeta.modules && editMeta.modules[key] ? "checked" : ""} onchange="onToggleModule('${key}',this.checked)" style="width:18px;height:18px;margin-top:2px;accent-color:var(--pf-theme);flex-shrink:0;">
+        <div><div style="font-size:13.5px;font-weight:bold;">${label}</div><div style="font-size:11.5px;color:var(--pf-muted);">Show this tab to participants.</div></div>
+      </label>`).join('')}
+    ${['handsOn','map','industry','quiz','contact'].filter(key => editMeta.modules && editMeta.modules[key]).map(renderOrganizerModuleContent).join('')}
+    <button class="save-btn" onclick="saveOrganizerChanges()">Save modules and content</button>
+    <div class="save-status ${saveStatusIsError ? 'error' : 'ok'}">${escHtml(saveStatus)}</div>
 
     ${hasQuiz ? renderQuizEditor() : ""}
     ${hasQuiz ? renderQuizResetTool() : ""}
@@ -998,11 +1024,32 @@ function renderResetLookupResult() {
   `;
 }
 
-function onToggleQuizModule(checked) {
-  editMeta.modules.quiz = checked;
-  if (checked && editQuizQuestions === null) loadQuizForEdit();
+function onToggleModule(key, checked) {
+  if (!editMeta.modules) editMeta.modules = {};
+  editMeta.modules[key] = checked;
+  if (key === 'quiz' && checked && editQuizQuestions === null) loadQuizForEdit();
   rerenderOrganizerScroll();
 }
+
+function ensureModuleContentDefaults() {
+  const defaults = {
+    handsOn:{title:'Hands on',intro:'',items:''}, map:{title:'Venue map',intro:'',address:'',image:''},
+    industry:{title:'Industry',intro:'',items:'',image:''}, quiz:{title:'Final test',intro:'Answer all questions. The test can only be taken once.'}, contact:{title:'Contact',intro:'',coordinatorName:'',coordinatorPhone:'',coordinatorEmail:'',supportName:'',supportPhone:'',supportEmail:'',image:''}
+  };
+  for (const key of Object.keys(defaults)) editModuleContent[key] = Object.assign({}, defaults[key], editModuleContent[key] || {});
+}
+function onEditModuleContent(module,key,value) { editModuleContent[module][key] = value; }
+function renderOrganizerModuleContent(module) {
+  const c=editModuleContent[module];
+  let specific='';
+  if(module==='handsOn') specific=`<div class="field-group"><label>Stations — one per line: Name | Time | Room | Stand</label><textarea oninput="onEditModuleContent('handsOn','items',this.value)">${escHtml(c.items)}</textarea></div>`;
+  if(module==='map') specific=`<div class="field-group"><label>Address</label><input value="${escHtml(c.address)}" oninput="onEditModuleContent('map','address',this.value)"></div>${renderOrganizerImage('map')}`;
+  if(module==='industry') specific=`<div class="field-group"><label>Partners — one per line: Name | Description | Website</label><textarea oninput="onEditModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderOrganizerImage('industry')}`;
+  if(module==='contact') specific=`<div class="field-group"><label>Coordinator name</label><input value="${escHtml(c.coordinatorName)}" oninput="onEditModuleContent('contact','coordinatorName',this.value)"></div><div class="field-row"><div class="field-group"><label>Phone</label><input value="${escHtml(c.coordinatorPhone)}" oninput="onEditModuleContent('contact','coordinatorPhone',this.value)"></div><div class="field-group"><label>Email</label><input value="${escHtml(c.coordinatorEmail)}" oninput="onEditModuleContent('contact','coordinatorEmail',this.value)"></div></div><div class="field-group"><label>Technical support name</label><input value="${escHtml(c.supportName)}" oninput="onEditModuleContent('contact','supportName',this.value)"></div><div class="field-row"><div class="field-group"><label>Support phone</label><input value="${escHtml(c.supportPhone)}" oninput="onEditModuleContent('contact','supportPhone',this.value)"></div><div class="field-group"><label>Support email</label><input value="${escHtml(c.supportEmail)}" oninput="onEditModuleContent('contact','supportEmail',this.value)"></div></div>${renderOrganizerImage('contact')}`;
+  return `<div class="info-card"><div class="field-group"><label>Heading</label><input value="${escHtml(c.title)}" oninput="onEditModuleContent('${module}','title',this.value)"></div><div class="field-group"><label>Introduction</label><textarea oninput="onEditModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>${specific}</div>`;
+}
+function renderOrganizerImage(module){const img=editModuleContent[module].image;return `<div class="field-group"><label>Image (maximum 1 MB)</label><input type="file" accept="image/*" onchange="onEditModuleImage('${module}',this.files[0])">${img?`<img class="content-image" src="${img}" alt="Preview"><button class="pin-btn" type="button" onclick="editModuleContent['${module}'].image='';rerenderOrganizerScroll()">Remove image</button>`:''}</div>`;}
+function onEditModuleImage(module,file){if(!file)return;if(file.size>1024*1024){alert('The image must be smaller than 1 MB.');return;}const reader=new FileReader();reader.onload=()=>{editModuleContent[module].image=reader.result;rerenderOrganizerScroll();};reader.readAsDataURL(file);}
 
 function onEditQuizPassPct(val) {
   editQuizPassPct = parseInt(val) || 0;
@@ -1142,6 +1189,7 @@ function saveOrganizerChanges() {
     participantCount: editMeta.participantCount,
     facultyCount: editMeta.facultyCount,
     modules: editMeta.modules,
+    moduleContent: editModuleContent,
     sessions: editSessions.filter(s => s.title && s.title.trim()),
   };
 
@@ -1149,6 +1197,7 @@ function saveOrganizerChanges() {
     console.log("Simulated save (PLATFORM_WORKER_URL is not set yet):", payload);
     confData.meta = Object.assign({}, confData.meta, payload);
     confData.schedule = payload.sessions;
+    confData.moduleContent = payload.moduleContent;
     saveStatus = "Saved (simulated — no backend connected yet)."; saveStatusIsError = false;
     rerenderOrganizerScroll();
     return;
@@ -1164,6 +1213,7 @@ function saveOrganizerChanges() {
       if (!res.ok) throw new Error(data.error || ("Server error (" + res.status + ")"));
       confData.meta = Object.assign({}, confData.meta, payload);
       confData.schedule = payload.sessions;
+      confData.moduleContent = payload.moduleContent;
       saveStatus = "Saved — participants will see the update next time they load the page.";
       saveStatusIsError = false;
       rerenderOrganizerScroll();

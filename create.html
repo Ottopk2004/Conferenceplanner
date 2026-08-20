@@ -92,6 +92,12 @@
     font-family: inherit;
     color: var(--pf-ink);
   }
+  .field-group textarea { width:100%; min-height:96px; resize:vertical; padding:10px 12px; border:2px solid var(--pf-border); border-radius:8px; font:14px inherit; }
+  .field-group textarea:focus { border-color:var(--pf-indigo); outline:none; }
+  .module-editor { margin:-2px 0 14px; padding:16px; border:2px solid var(--pf-indigo); border-top:0; border-radius:0 0 12px 12px; background:#fff; }
+  .module-editor .editor-title { color:var(--pf-indigo); font-weight:bold; font-size:13px; margin-bottom:12px; }
+  .image-preview { max-width:100%; max-height:260px; display:block; border:2px solid var(--pf-border); border-radius:10px; margin-top:10px; }
+  .remove-image-btn { margin-top:8px; padding:7px 10px; border:1px solid var(--pf-red); color:var(--pf-red); background:#fff; border-radius:7px; cursor:pointer; }
   .field-group input:focus { border-color: var(--pf-indigo); outline: none; }
   .field-hint { font-size: 11px; color: var(--pf-muted); margin-top: 5px; line-height: 1.5; }
   .field-hint.error { color: var(--pf-red); }
@@ -376,6 +382,13 @@ let form = {
   participantCount: 100,
   facultyCount: 20,
   modules: { handsOn: false, map: false, industry: false, quiz: false, contact: false },
+  moduleContent: {
+    handsOn: { title: "Hands on", intro: "", items: "" },
+    map: { title: "Venue map", intro: "", address: "", image: "" },
+    industry: { title: "Industry", intro: "", items: "", image: "" },
+    quiz: { title: "Final test", intro: "Answer all questions. The test can only be taken once." },
+    contact: { title: "Contact", intro: "", coordinatorName: "", coordinatorPhone: "", coordinatorEmail: "", supportName: "", supportPhone: "", supportEmail: "", image: "" },
+  },
 };
 
 let sessions = [
@@ -544,6 +557,12 @@ function render() {
           </label>
         </div>
       `).join('')}
+
+      ${form.modules.handsOn ? renderModuleEditor('handsOn') : ''}
+      ${form.modules.map ? renderModuleEditor('map') : ''}
+      ${form.modules.industry ? renderModuleEditor('industry') : ''}
+      ${form.modules.quiz ? renderModuleEditor('quiz') : ''}
+      ${form.modules.contact ? renderModuleEditor('contact') : ''}
     </div>
 
     <div class="card">
@@ -618,6 +637,41 @@ function onModuleToggle(key, checked) {
   render();
 }
 
+function onModuleContent(module, key, value) {
+  form.moduleContent[module][key] = value;
+}
+
+function renderModuleEditor(module) {
+  const c = form.moduleContent[module];
+  const common = `
+    <div class="field-group"><label>Tab heading</label><input type="text" value="${escHtml(c.title)}" oninput="onModuleContent('${module}','title',this.value)"></div>
+    <div class="field-group"><label>Introduction</label><textarea placeholder="Information shown at the top of this section" oninput="onModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>`;
+  let fields = '';
+  if (module === 'handsOn') fields = `<div class="field-group"><label>Stations and rotations</label><textarea placeholder="One card per line: Yellow station | 10:30–11:00 | Room A1 | Stand 1" oninput="onModuleContent('handsOn','items',this.value)">${escHtml(c.items)}</textarea><div class="field-hint">Use | between station, time, room and stand.</div></div>`;
+  if (module === 'map') fields = `<div class="field-group"><label>Venue address</label><input type="text" value="${escHtml(c.address)}" oninput="onModuleContent('map','address',this.value)"></div>${renderImageField('map')}`;
+  if (module === 'industry') fields = `<div class="field-group"><label>Industry partners</label><textarea placeholder="One card per line: Company name | Description | Website" oninput="onModuleContent('industry','items',this.value)">${escHtml(c.items)}</textarea></div>${renderImageField('industry')}`;
+  if (module === 'contact') fields = `
+    <div class="field-row"><div class="field-group"><label>Coordinator name</label><input type="text" value="${escHtml(c.coordinatorName)}" oninput="onModuleContent('contact','coordinatorName',this.value)"></div><div class="field-group"><label>Phone</label><input type="text" value="${escHtml(c.coordinatorPhone)}" oninput="onModuleContent('contact','coordinatorPhone',this.value)"></div></div>
+    <div class="field-group"><label>Coordinator email</label><input type="email" value="${escHtml(c.coordinatorEmail)}" oninput="onModuleContent('contact','coordinatorEmail',this.value)"></div>
+    <div class="field-row"><div class="field-group"><label>Technical support</label><input type="text" value="${escHtml(c.supportName)}" oninput="onModuleContent('contact','supportName',this.value)"></div><div class="field-group"><label>Support phone</label><input type="text" value="${escHtml(c.supportPhone)}" oninput="onModuleContent('contact','supportPhone',this.value)"></div></div>
+    <div class="field-group"><label>Support email</label><input type="email" value="${escHtml(c.supportEmail)}" oninput="onModuleContent('contact','supportEmail',this.value)"></div>${renderImageField('contact')}`;
+  return `<div class="module-editor"><div class="editor-title">Edit ${escHtml(c.title || module)}</div>${common}${fields}</div>`;
+}
+
+function renderImageField(module) {
+  const image = form.moduleContent[module].image;
+  return `<div class="field-group"><label>Image (optional, maximum 1 MB)</label><input type="file" accept="image/*" onchange="onModuleImage('${module}',this.files[0])">${image ? `<img class="image-preview" src="${image}" alt="Preview"><button type="button" class="remove-image-btn" onclick="removeModuleImage('${module}')">Remove image</button>` : ''}</div>`;
+}
+
+function onModuleImage(module, file) {
+  if (!file) return;
+  if (file.size > 1024 * 1024) { alert('The image must be smaller than 1 MB.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => { form.moduleContent[module].image = reader.result; render(); };
+  reader.readAsDataURL(file);
+}
+function removeModuleImage(module) { form.moduleContent[module].image = ''; render(); }
+
 function addSession() {
   sessions.push({ date: "", time: "", title: "", speaker: "" });
   render();
@@ -659,6 +713,7 @@ function submitConference() {
     participantCount: form.participantCount,
     facultyCount: form.facultyCount,
     modules: form.modules,
+    moduleContent: form.moduleContent,
     sessions: sessions.filter(s => s.title.trim().length > 0),
   };
 
