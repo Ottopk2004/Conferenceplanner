@@ -516,7 +516,7 @@ function render() {
           <input type="date" id="fEnd" value="${escHtml(form.endDate)}" oninput="onField('endDate', this.value)">
         </div>
       </div>
-      <div class="field-hint error" style="margin-top:-8px;margin-bottom:12px;">${!datesValid && form.startDate && form.endDate ? "End date must be on or after the start date." : ""}</div>
+      <div class="field-hint error" id="dateValidation" style="margin-top:-8px;margin-bottom:12px;">${!datesValid && form.startDate && form.endDate ? "End date must be on or after the start date." : ""}</div>
 
       <div class="field-group">
         <label for="fEmail">Contact email (shown to participants, optional)</label>
@@ -629,7 +629,7 @@ function render() {
       <button class="add-session-btn" onclick="addSession()">+ Add session</button>
       </div></details>
 
-    <button class="submit-btn ${ready ? "ready" : ""}" ${ready ? "" : "disabled"} onclick="submitConference()">
+    <button id="createConferenceBtn" class="submit-btn ${ready ? "ready" : ""}" ${ready ? "" : "disabled"} onclick="submitConference()">
       ${creating ? "Creating..." : "Create conference"}
     </button>
 
@@ -654,7 +654,7 @@ function onSlug(val) {
 
 function onField(key, val) {
   form[key] = val;
-  render();
+  if (key === 'themeColor') render(); else updateCreateReadiness();
 }
 
 function onPin(val) {
@@ -681,7 +681,7 @@ function onHandsOnStationCount(sessionIndex,value) {
   while(c.stations.length<count)c.stations.push({name:`Station ${c.stations.length+1}`,room:'',stand:`Stand ${c.stations.length+1}`});
   c.stations=c.stations.slice(0,count);render();
 }
-function onHandsOnSession(i,key,value){form.moduleContent.handsOn.sessions[i][key]=value;render();}
+function onHandsOnSession(i,key,value){form.moduleContent.handsOn.sessions[i][key]=value;updateCreateReadiness();}
 function onHandsOnStation(si,i,key,value){form.moduleContent.handsOn.sessions[si].stations[i][key]=value;}
 function validateHandsOn(c){const toMin=t=>{const m=String(t||'').match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):0;};normalizeHandsOn(c);return c.sessions.length>0&&c.sessions.every(s=>!!s.date&&toMin(s.endTime)>toMin(s.startTime)&&(toMin(s.endTime)-toMin(s.startTime))>=Number(s.stationCount||0)*Number(s.rotationMinutes||0));}
 function newIndustryBooth(){return {name:'',description:'',website:'',image:''};}
@@ -697,7 +697,7 @@ function renderModuleEditor(module) {
     <div class="field-group"><label>Tab heading</label><input type="text" value="${escHtml(c.title)}" oninput="onModuleContent('${module}','title',this.value)"></div>
     <div class="field-group"><label>Introduction</label><textarea placeholder="Information shown at the top of this section" oninput="onModuleContent('${module}','intro',this.value)">${escHtml(c.intro)}</textarea></div>`;
   let fields = '';
-  if (module === 'handsOn') { normalizeHandsOn(c); fields = `${c.sessions.map((hs,si)=>`<div class="session-row">${c.sessions.length>1?`<button class="remove-btn" onclick="removeHandsOnSession(${si})">✕</button>`:''}<h3 style="color:var(--pf-indigo);margin-bottom:12px">Hands-on session ${si+1}</h3><div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(hs.date)}" oninput="onHandsOnSession(${si},'date',this.value)"></div><div class="field-group"><label>Number of stations</label><input type="number" min="1" max="30" value="${hs.stationCount}" onchange="onHandsOnStationCount(${si},this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(hs.startTime)}" oninput="onHandsOnSession(${si},'startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(hs.endTime)}" oninput="onHandsOnSession(${si},'endTime',this.value)"></div><div class="field-group"><label>Minutes/rotation</label><input type="number" min="5" step="5" value="${hs.rotationMinutes}" oninput="onHandsOnSession(${si},'rotationMinutes',parseInt(this.value)||30)"></div></div>${(hs.stations||[]).map((s,i)=>`<div class="session-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(s.name)}" oninput="onHandsOnStation(${si},${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onHandsOnStation(${si},${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onHandsOnStation(${si},${i},'stand',this.value)"></div></div></div>`).join('')}</div>`).join('')}<button type="button" class="add-session-btn" onclick="addHandsOnSession()">+ Add another Hands-on session</button><div class="field-hint ${validateHandsOn(c)?'':'error'}">Each session must fit stations × minutes per rotation.</div>`; }
+  if (module === 'handsOn') { normalizeHandsOn(c); fields = `${c.sessions.map((hs,si)=>`<div class="session-row">${c.sessions.length>1?`<button class="remove-btn" onclick="removeHandsOnSession(${si})">✕</button>`:''}<h3 style="color:var(--pf-indigo);margin-bottom:12px">Hands-on session ${si+1}</h3><div class="field-row"><div class="field-group"><label>Date</label><input type="date" value="${escHtml(hs.date)}" oninput="onHandsOnSession(${si},'date',this.value)"></div><div class="field-group"><label>Number of stations</label><input type="number" min="1" max="30" value="${hs.stationCount}" onchange="onHandsOnStationCount(${si},this.value)"></div></div><div class="field-row"><div class="field-group"><label>Start</label><input type="time" value="${escHtml(hs.startTime)}" oninput="onHandsOnSession(${si},'startTime',this.value)"></div><div class="field-group"><label>End</label><input type="time" value="${escHtml(hs.endTime)}" oninput="onHandsOnSession(${si},'endTime',this.value)"></div><div class="field-group"><label>Minutes/rotation</label><input type="number" min="5" step="5" value="${hs.rotationMinutes}" oninput="onHandsOnSession(${si},'rotationMinutes',parseInt(this.value)||30)"></div></div>${(hs.stations||[]).map((s,i)=>`<div class="session-row"><span class="mini-label">Station ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(s.name)}" oninput="onHandsOnStation(${si},${i},'name',this.value)"></div><div class="field-row"><div class="field-group"><label>Room</label><input value="${escHtml(s.room)}" oninput="onHandsOnStation(${si},${i},'room',this.value)"></div><div class="field-group"><label>Stand</label><input value="${escHtml(s.stand)}" oninput="onHandsOnStation(${si},${i},'stand',this.value)"></div></div></div>`).join('')}</div>`).join('')}<button type="button" class="add-session-btn" onclick="addHandsOnSession()">+ Add another Hands-on session</button><div id="handsOnValidation" class="field-hint ${validateHandsOn(c)?'':'error'}">Each session must fit stations × minutes per rotation.</div>`; }
   if (module === 'map') fields = `<div class="field-group"><label>Venue address</label><input type="text" value="${escHtml(c.address)}" oninput="onModuleContent('map','address',this.value)"></div>${renderImageField('map')}`;
   if (module === 'industry') { normalizeIndustry(c); fields = `${c.booths.map((b,i)=>`<div class="session-row">${c.booths.length>1?`<button class="remove-btn" onclick="removeIndustryBooth(${i})">✕</button>`:''}<span class="mini-label">Industry booth ${i+1}</span><div class="field-group"><label>Name</label><input value="${escHtml(b.name)}" oninput="onIndustryBooth(${i},'name',this.value)"></div><div class="field-group"><label>Description</label><textarea oninput="onIndustryBooth(${i},'description',this.value)">${escHtml(b.description)}</textarea></div><div class="field-group"><label>Website</label><input type="url" value="${escHtml(b.website)}" placeholder="https://..." oninput="onIndustryBooth(${i},'website',this.value)"></div><div class="field-group"><label>Booth image (maximum 1 MB)</label><input type="file" accept="image/*" onchange="onIndustryBoothImage(${i},this.files[0])">${b.image?`<img class="image-preview" src="${b.image}" alt="Preview"><button type="button" class="remove-image-btn" onclick="form.moduleContent.industry.booths[${i}].image='';render()">Remove image</button>`:''}</div></div>`).join('')}<button type="button" class="add-session-btn" onclick="addIndustryBooth()">+ Add industry booth</button>`; }
   if (module === 'contact') fields = `
@@ -737,7 +737,17 @@ function onSessionField(i, key, val) {
   // Avoid full re-render on every keystroke in text fields so focus isn't
   // lost — only re-render when it could affect validity (title determines
   // whether the form is submittable).
-  if (key === "title") { render(); return; }
+  if (key === "title") updateCreateReadiness();
+}
+
+function updateCreateReadiness(){
+  const datesValid=!!form.startDate&&!!form.endDate&&form.startDate<=form.endDate;
+  const sessionsValid=sessions.some(s=>s.title.trim().length>0);
+  const handsOnValid=!form.modules.handsOn||validateHandsOn(form.moduleContent.handsOn);
+  const ready=/^[a-z]{2,12}$/.test(form.slug)&&/^\d{4,6}$/.test(form.adminPin)&&form.name.trim().length>=3&&datesValid&&sessionsValid&&handsOnValid&&!creating;
+  const btn=document.getElementById('createConferenceBtn');if(btn){btn.disabled=!ready;btn.classList.toggle('ready',ready);}
+  const dateMsg=document.getElementById('dateValidation');if(dateMsg)dateMsg.textContent=!datesValid&&form.startDate&&form.endDate?'End date must be on or after the start date.':'';
+  const handsMsg=document.getElementById('handsOnValidation');if(handsMsg){handsMsg.classList.toggle('error',!handsOnValid);handsMsg.textContent=handsOnValid?'Each session is long enough for all rotations.':'Each session must fit stations × minutes per rotation.';}
 }
 
 function onTimeInput(input, i) {
